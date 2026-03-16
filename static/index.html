@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>家族ダッシュボード</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header id="header">
+    <div id="clock"></div>
+    <div id="date-info"></div>
+    <div id="refresh-indicator" class="hidden">更新中...</div>
+  </header>
+
+  <main id="main">
+    <section id="events-section" class="panel">
+      <h2 class="panel-title">📅 今日の予定</h2>
+      <div id="events-list" class="item-list"></div>
+    </section>
+
+    <div id="tasks-column">
+      <section id="stock-section" class="panel">
+        <h2 class="panel-title">📌 期限付きToDo</h2>
+        <div id="stock-list" class="item-list"></div>
+      </section>
+
+      <section id="flow-section" class="panel">
+        <h2 class="panel-title" id="flow-title">🔄 本日の曜日タスク</h2>
+        <div id="flow-list" class="item-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
