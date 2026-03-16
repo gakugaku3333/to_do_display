@@ -13,6 +13,7 @@ def _get_client() -> caldav.DAVClient:
         url="https://caldav.icloud.com",
         username=settings.icloud_apple_id,
         password=settings.icloud_app_password,
+        timeout=15,
     )
 
 

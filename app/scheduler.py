@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -21,14 +22,14 @@ async def refresh_data():
 
     events: list[CalendarEvent] = []
     try:
-        events = google_calendar.fetch_today_events()
+        events = await asyncio.to_thread(google_calendar.fetch_today_events)
     except Exception as e:
         print(f"[Scheduler] Google Calendar エラー: {e}")
 
     stock_tasks: list[Task] = []
     flow_tasks: list[Task] = []
     try:
-        stock_tasks, flow_tasks = icloud_reminders.fetch_tasks()
+        stock_tasks, flow_tasks = await asyncio.to_thread(icloud_reminders.fetch_tasks)
     except Exception as e:
         print(f"[Scheduler] iCloud Reminders エラー: {e}")
 

@@ -114,8 +114,6 @@ function createTaskElement(task) {
   el.appendChild(checkbox);
   el.appendChild(content);
 
-  el.addEventListener('click', () => handleTaskTap(el, task));
-
   return el;
 }
 
@@ -191,6 +189,33 @@ async function fetchAndRender() {
     indicator.classList.add('hidden');
   }
 }
+
+// ===== イベントデリゲーション (innerHTML 上書き後もリスナーが生きる) =====
+for (const listId of ['stock-list', 'flow-list']) {
+  document.getElementById(listId).addEventListener('click', (e) => {
+    const item = e.target.closest('.task-item');
+    if (!item) return;
+    const task = {
+      id: item.dataset.taskId,
+      task_type: item.dataset.taskType,
+      due_date: item.dataset.dueDate || null,
+    };
+    handleTaskTap(item, task);
+  });
+}
+
+// ===== Screen Wake Lock (タブレットのスリープ防止) =====
+async function requestWakeLock() {
+  try {
+    await navigator.wakeLock.request('screen');
+  } catch (_) { /* 非対応ブラウザでは無視 */ }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') requestWakeLock();
+});
+
+requestWakeLock();
 
 // ===== 初期化 =====
 fetchAndRender();
