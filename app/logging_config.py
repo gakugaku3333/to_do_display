@@ -31,5 +31,5 @@ def setup_logging(level: str = "INFO"):
     root_logger.addHandler(file_handler)
 
     # サードパーティのノイズを抑制
-    for noisy in ("apscheduler", "googleapiclient.discovery", "caldav", "urllib3"):
+    for noisy in ("apscheduler", "googleapiclient.discovery", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)

@@ -103,7 +103,7 @@ def _parse_reminder(rem: dict, task_type: str, today: date) -> Task | None:
     return None
 
 
-def fetch_tasks(tz_name: str = "Asia/Tokyo") -> tuple[list[Task], list[Task]]:
+def fetch_tasks() -> tuple[list[Task], list[Task]]:
     """ストック・フロー両リストからタスクを取得する"""
     today = date.today()
     stock_tasks: list[Task] = []

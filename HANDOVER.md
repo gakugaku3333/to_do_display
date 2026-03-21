@@ -23,8 +23,7 @@
 Android タブレット (ブラウザ / PWA)
         │  HTTP (port 8080)
         │
-        ├── SSE: GET /api/stream    → リアルタイムデータ配信
-        ├── REST: GET /api/today    → 初回データ取得（フォールバック）
+        ├── SSE: GET /api/stream    → リアルタイムデータ配信（初回データも即送信）
         ├── REST: POST /api/tasks/{id}/complete|uncomplete
         ├── REST: GET /api/health   → ヘルスチェック（認証不要）
         ▼
@@ -43,7 +42,7 @@ Mac mini (FastAPI + uvicorn)
 2. データ更新完了時に **SSE** で全接続クライアントにプッシュ配信
 3. タスク完了操作は即座に SQLite に書き込み → SSEで全クライアントに反映
 4. フロータスクの完了状態は日付変更時に自動リセット
-5. フロントエンドは初回のみREST取得、以降はSSEでリアルタイム受信
+5. フロントエンドはSSE接続のみ（初回データもSSE経由で即配信）
 
 ---
 

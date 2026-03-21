@@ -1,22 +1,20 @@
 import logging
 import os
+import sys
 
 from fastapi import APIRouter
 
-from app.config import settings
 from app.scheduler import get_last_refresh
+from app.services.google_calendar import TOKENS_DIR
 from app.sse import sse_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-TOKENS_DIR = "tokens"
-
 
 @router.get("/api/health")
 async def health_check():
-    # DB接続チェック
     db_ok = False
     try:
         from app.database import get_connection
@@ -26,13 +24,10 @@ async def health_check():
     except Exception:
         logger.error("ヘルスチェック: DB接続失敗", exc_info=True)
 
-    # Google Calendar トークン存在チェック
     husband_token = os.path.exists(os.path.join(TOKENS_DIR, "husband.json"))
     wife_token = os.path.exists(os.path.join(TOKENS_DIR, "wife.json"))
 
-    # Reminders (AppleScript) チェック — macOS で動作中なら有効
-    import sys
-    icloud_configured = sys.platform == "darwin"
+    last = get_last_refresh()
 
     return {
         "status": "ok" if db_ok else "degraded",
@@ -42,8 +37,8 @@ async def health_check():
             "wife": wife_token,
         },
         "icloud": {
-            "configured": icloud_configured,
+            "configured": sys.platform == "darwin",
         },
-        "last_refresh": get_last_refresh(),
+        "last_refresh": last.isoformat() if last else None,
         "sse_clients": sse_manager.client_count,
     }

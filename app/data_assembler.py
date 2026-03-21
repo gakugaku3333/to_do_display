@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import date
 
 from app.database import get_completed_ids
-from app.models import TodayData
-from app.scheduler import get_cached_data, WEEKDAYS_JA
+from app.models import TodayData, WEEKDAYS_JA
 
 
 async def get_current_data() -> TodayData | None:
     """キャッシュデータに完了状態をマージして返す"""
+    from app.scheduler import get_cached_data
+
     data = get_cached_data()
     if data is None:
         return None
@@ -43,3 +44,12 @@ def get_empty_data() -> TodayData:
         stock_tasks=[],
         flow_tasks=[],
     )
+
+
+async def broadcast_current_data():
+    """現在のデータをSSE経由で全クライアントに配信する"""
+    from app.sse import sse_manager
+
+    data = await get_current_data()
+    if data:
+        await sse_manager.broadcast(data.model_dump_json())

@@ -23,8 +23,6 @@ OWNER_COLORS = {
     "wife": "#E86A9A",
 }
 
-WEEKDAYS_JA = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
-
 
 def get_credentials(account_name: str) -> Credentials | None:
     token_path = os.path.join(TOKENS_DIR, f"{account_name}.json")

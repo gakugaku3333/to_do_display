@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
+from contextlib import asynccontextmanager
 from unittest.mock import patch
 
 import pytest
@@ -47,66 +48,45 @@ def _mock_fetch_tasks(*args, **kwargs):
     return stock, flow
 
 
-@pytest_asyncio.fixture
-async def client():
+@asynccontextmanager
+async def _create_test_client(api_token: str = ""):
+    """テストクライアント共通セットアップ"""
     import app.database as db_module
     import app.config as config_module
 
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     tmp.close()
 
-    # DB接続をリセット
     db_module._connection = None
     db_module.DB_PATH = tmp.name
 
-    # 認証無効化
     original_token = config_module.settings.api_token
-    config_module.settings.api_token = ""
+    config_module.settings.api_token = api_token
 
     with patch("app.services.google_calendar.fetch_today_events", _mock_fetch_today_events), \
          patch("app.services.icloud_reminders.fetch_tasks", _mock_fetch_tasks):
 
         from app.main import app as fastapi_app
 
-        # DB初期化
         await db_module.init_db()
 
         transport = ASGITransport(app=fastapi_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac
 
-    # クリーンアップ
     config_module.settings.api_token = original_token
     await db_module.close_connection()
     os.unlink(tmp.name)
+
+
+@pytest_asyncio.fixture
+async def client():
+    async with _create_test_client(api_token="") as ac:
+        yield ac
 
 
 @pytest_asyncio.fixture
 async def auth_client():
     """認証トークン付きクライアント"""
-    import app.database as db_module
-    import app.config as config_module
-
-    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    tmp.close()
-
-    db_module._connection = None
-    db_module.DB_PATH = tmp.name
-
-    original_token = config_module.settings.api_token
-    config_module.settings.api_token = "test-secret-token"
-
-    with patch("app.services.google_calendar.fetch_today_events", _mock_fetch_today_events), \
-         patch("app.services.icloud_reminders.fetch_tasks", _mock_fetch_tasks):
-
-        from app.main import app as fastapi_app
-
-        await db_module.init_db()
-
-        transport = ASGITransport(app=fastapi_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            yield ac
-
-    config_module.settings.api_token = original_token
-    await db_module.close_connection()
-    os.unlink(tmp.name)
+    async with _create_test_client(api_token="test-secret-token") as ac:
+        yield ac
