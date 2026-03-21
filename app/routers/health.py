@@ -30,8 +30,9 @@ async def health_check():
     husband_token = os.path.exists(os.path.join(TOKENS_DIR, "husband.json"))
     wife_token = os.path.exists(os.path.join(TOKENS_DIR, "wife.json"))
 
-    # iCloud設定チェック
-    icloud_configured = bool(settings.icloud_apple_id and settings.icloud_app_password)
+    # Reminders (AppleScript) チェック — macOS で動作中なら有効
+    import sys
+    icloud_configured = sys.platform == "darwin"
 
     return {
         "status": "ok" if db_ok else "degraded",

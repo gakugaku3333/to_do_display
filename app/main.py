@@ -21,8 +21,10 @@ async def lifespan(app: FastAPI):
     logger.info("ダッシュボード起動中...")
     await init_db()
     start_scheduler()
-    await refresh_data()
-    logger.info("ダッシュボード起動完了")
+    # 初回データ取得はバックグラウンドで実行（Reminders 同期に数分かかる場合がある）
+    import asyncio
+    asyncio.create_task(refresh_data())
+    logger.info("ダッシュボード起動完了（データ取得はバックグラウンドで実行中）")
     yield
     stop_scheduler()
     await close_connection()

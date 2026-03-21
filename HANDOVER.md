@@ -33,7 +33,7 @@ Mac mini (FastAPI + uvicorn)
         ├── SSEManager              → 接続中クライアントへブロードキャスト
         ├── APScheduler             → 5分ごとに外部データ取得
         ├── Google Calendar API     → OAuth2（夫・妻各アカウント）
-        ├── iCloud CalDAV           → Apple ID + App Password
+        ├── Apple Reminders         → AppleScript (osascript) 経由
         └── SQLite (dashboard.db)   → タスク完了状態の永続化（WALモード）
 ```
 
@@ -67,7 +67,7 @@ to_do_display/
 │   │   └── health.py            # GET /api/health
 │   └── services/
 │       ├── google_calendar.py   # Google Calendar API クライアント
-│       └── icloud_reminders.py  # iCloud CalDAV クライアント
+│       └── icloud_reminders.py  # Apple Reminders (AppleScript経由)
 ├── static/
 │   ├── index.html               # メイン画面（PWA対応）
 │   ├── style.css                # ダークテーマCSS
@@ -82,6 +82,8 @@ to_do_display/
 │   ├── test_database.py         # DB操作テスト
 │   ├── test_health.py           # ヘルスチェックテスト
 │   └── test_sse.py              # SSEテスト
+├── scripts/
+│   └── fetch_reminders.applescript  # Reminders取得用AppleScript
 ├── setup/
 │   └── com.family.dashboard.plist  # macOS 自動起動設定
 ├── tokens/                      # Google OAuth トークン（git管理外）
@@ -128,18 +130,18 @@ python setup_google_auth.py wife
 
 `tokens/husband.json`, `tokens/wife.json` が生成されれば成功。
 
-### 4.3 iCloud リマインダー認証
+### 4.3 Apple リマインダー設定
 
-1. iPhoneのリマインダーアプリで「**ストック**」「**フロー**」リストを作成
-2. [appleid.apple.com](https://appleid.apple.com/) → サインイン → **App用パスワード** を生成
-3. macOS Keychain に登録:
+iCloud CalDAV は iOS 13+ で非対応のため、**macOS ネイティブの AppleScript** 経由でアクセスします。
 
-```bash
-security add-generic-password -s "icloud-todo" -a "APPLE_ID" -w "your@icloud.com"
-security add-generic-password -s "icloud-todo" -a "APP_PASSWORD" -w "xxxx-xxxx-xxxx-xxxx"
-```
+1. iPhoneのリマインダーアプリで「**ストック**」「**フロー**」リストを作成（カタカナ表記）
+2. Mac mini 上で Reminders.app が iCloud と同期していることを確認
+3. 追加の認証設定は不要（osascript が macOS の EventKit 経由でアクセス）
 
-> **注意:** `.env` に `ICLOUD_APPLE_ID` / `ICLOUD_APP_PASSWORD` を直接書く方法でも動作するが、Keychain経由を推奨。`start.sh` が Keychain から自動読み込みする。
+> **注意:**
+> - 初回起動時や Reminders.app が長時間停止していた場合、iCloud 同期に1〜5分かかります
+> - Mac mini で常時運用する場合、Reminders.app は常駐するため問題ありません
+> - `.env` の `ICLOUD_APPLE_ID` / `ICLOUD_APP_PASSWORD` は CalDAV 時代の名残で、現在は使用していません
 
 ### 4.4 API認証の設定（任意）
 
@@ -224,10 +226,8 @@ tail -f /var/log/family-dashboard.error.log
 
 ### Keychain に保存される情報
 
-| サービス名 | アカウント | 内容 |
-|------------|-----------|------|
-| `icloud-todo` | `APPLE_ID` | Apple ID メールアドレス |
-| `icloud-todo` | `APP_PASSWORD` | App用パスワード |
+> CalDAV 方式から AppleScript 方式に移行したため、Keychain への iCloud 認証情報の登録は不要になりました。
+> 既に登録済みの場合もそのまま残して問題ありません（使用されません）。
 
 ---
 
@@ -287,8 +287,8 @@ python -m pytest tests/ -v
 
 | 症状 | 原因と対処 |
 |------|-----------|
-| 画面に予定が表示されない | `logs/dashboard.log` 確認 → Google/iCloud の認証期限切れの可能性 |
-| `Keychain に認証情報が見つかりません` | `security add-generic-password` で再登録 |
+| 画面に予定が表示されない | `logs/dashboard.log` 確認 → Google認証期限切れ or Reminders同期中の可能性 |
+| リマインダーが表示されない | 起動後1〜5分待つ（iCloud同期中）。`logs/dashboard.log` で "Reminders 取得完了" を確認 |
 | Google認証でブラウザが開かない | `credentials.json` が配置されているか確認 |
 | タスク完了が反映されない | `dashboard.db` の権限確認。削除すれば再生成される |
 | Mac再起動後にサービスが起動しない | `launchctl list | grep family` で確認 |
@@ -310,6 +310,6 @@ python -m pytest tests/ -v
 | APScheduler | 3.10.4 | 定期実行スケジューラ |
 | google-api-python-client | 2.145.0 | Google Calendar API |
 | google-auth-oauthlib | 1.2.1 | Google OAuth2 認証 |
-| caldav | 1.3.9 | iCloud CalDAV クライアント |
+| (osascript) | macOS標準 | Apple Reminders アクセス（AppleScript） |
 | pytest | 8.3.3 | テストフレームワーク（dev） |
 | httpx | 0.27.2 | テスト用HTTPクライアント（dev） |

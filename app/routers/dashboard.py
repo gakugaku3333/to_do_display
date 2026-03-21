@@ -7,7 +7,6 @@ from fastapi.responses import StreamingResponse
 from app.auth import verify_token
 from app.data_assembler import get_current_data, get_empty_data
 from app.models import TodayData
-from app.scheduler import refresh_data
 from app.sse import sse_manager
 
 logger = logging.getLogger(__name__)
@@ -19,9 +18,7 @@ router = APIRouter()
 async def get_today():
     data = await get_current_data()
     if data is None:
-        await refresh_data()
-        data = await get_current_data()
-    if data is None:
+        # キャッシュが未構築の場合は空データを返す（バックグラウンドで取得中）
         data = get_empty_data()
     return data
 

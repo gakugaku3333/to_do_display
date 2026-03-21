@@ -1,6 +1,8 @@
 .env
 tokens/
 *.db
+*.db-shm
+*.db-wal
 __pycache__/
 *.pyc
 *.pyo
@@ -8,3 +10,6 @@ __pycache__/
 venv/
 .DS_Store
 logs/
+credentials.json
+*.png
+*.jpg
