@@ -256,24 +256,6 @@ function connectSSE() {
   };
 }
 
-// ===== データ取得（初回ロード用） =====
-async function fetchAndRender() {
-  const indicator = document.getElementById('refresh-indicator');
-  indicator.classList.remove('hidden');
-
-  try {
-    const res = await fetch('/api/today', { headers: authHeaders() });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    renderAll(data);
-  } catch (e) {
-    console.error('データ取得エラー:', e);
-    showStatusBanner('データの取得に失敗しました', 'error');
-  } finally {
-    indicator.classList.add('hidden');
-  }
-}
-
 // ===== Screen Wake Lock (タブレットのスリープ防止) =====
 async function requestWakeLock() {
   try {
@@ -294,5 +276,4 @@ document.addEventListener('visibilitychange', () => {
 requestWakeLock();
 
 // ===== 初期化 =====
-fetchAndRender();
 connectSSE();

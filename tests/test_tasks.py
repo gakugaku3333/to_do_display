@@ -34,12 +34,16 @@ async def test_complete_invalid_task_type(client):
 
 @pytest.mark.asyncio
 async def test_completed_task_reflected_in_today(client):
+    from app.data_assembler import get_current_data
+    from app.scheduler import refresh_data
+
+    await refresh_data()
     await client.post(
         "/api/tasks/stock-1/complete",
         json={"task_type": "stock", "due_date": "2026-03-21"},
     )
-    res = await client.get("/api/today")
-    data = res.json()
-    stock = [t for t in data["stock_tasks"] if t["id"] == "stock-1"]
+    data = await get_current_data()
+    assert data is not None
+    stock = [t for t in data.stock_tasks if t.id == "stock-1"]
     assert len(stock) == 1
-    assert stock[0]["is_completed"] is True
+    assert stock[0].is_completed is True
