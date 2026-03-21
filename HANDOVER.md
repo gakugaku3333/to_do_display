@@ -1,0 +1,315 @@
+# 家族スケジュールダッシュボード — 引き継ぎ資料
+
+## 1. プロジェクト概要
+
+家族（夫・妻）の **Googleカレンダー予定** と **Apple リマインダー（iCloud）** を1画面に集約表示するWebダッシュボード。Mac mini で常時起動し、ダイニングに置いたAndroidタブレットから閲覧する想定。
+
+### 主な機能
+
+- 夫婦のGoogleカレンダー予定を色分け表示（夫: 青、妻: ピンク）
+- iCloudリマインダーを「ストック（期限ベース）」「フロー（当日のみ）」の2カテゴリで表示
+- タスクのタップ完了 / 取消（即座にUI反映、エラー時ロールバック）
+- **SSE（Server-Sent Events）によるリアルタイム更新**
+- **トークンベースのAPI認証**
+- **PWA対応**（フルスクリーン、オフラインキャッシュ）
+- **ヘルスチェックエンドポイント** (`/api/health`)
+- 5分ごとの自動データ更新、画面のスリープ防止（Wake Lock）
+
+---
+
+## 2. アーキテクチャ
+
+```
+Android タブレット (ブラウザ / PWA)
+        │  HTTP (port 8080)
+        │
+        ├── SSE: GET /api/stream    → リアルタイムデータ配信
+        ├── REST: GET /api/today    → 初回データ取得（フォールバック）
+        ├── REST: POST /api/tasks/{id}/complete|uncomplete
+        ├── REST: GET /api/health   → ヘルスチェック（認証不要）
+        ▼
+Mac mini (FastAPI + uvicorn)
+        │
+        ├── SSEManager              → 接続中クライアントへブロードキャスト
+        ├── APScheduler             → 5分ごとに外部データ取得
+        ├── Google Calendar API     → OAuth2（夫・妻各アカウント）
+        ├── iCloud CalDAV           → Apple ID + App Password
+        └── SQLite (dashboard.db)   → タスク完了状態の永続化（WALモード）
+```
+
+### データフロー
+
+1. **APScheduler** が5分ごとに Google Calendar / iCloud からデータ取得 → メモリキャッシュに保存
+2. データ更新完了時に **SSE** で全接続クライアントにプッシュ配信
+3. タスク完了操作は即座に SQLite に書き込み → SSEで全クライアントに反映
+4. フロータスクの完了状態は日付変更時に自動リセット
+5. フロントエンドは初回のみREST取得、以降はSSEでリアルタイム受信
+
+---
+
+## 3. ディレクトリ構成
+
+```
+to_do_display/
+├── app/
+│   ├── main.py                  # FastAPI エントリポイント（lifespan管理）
+│   ├── config.py                # pydantic-settings による設定読み込み
+│   ├── models.py                # データモデル（CalendarEvent, Task, TodayData）
+│   ├── database.py              # SQLite操作（接続一元管理、WALモード）
+│   ├── scheduler.py             # APScheduler（5分間隔のデータ更新）
+│   ├── sse.py                   # SSEManager（クライアント接続管理、ブロードキャスト）
+│   ├── data_assembler.py        # キャッシュ + 完了状態マージの共通ロジック
+│   ├── auth.py                  # トークン認証（Bearer / query param）
+│   ├── logging_config.py        # ロギング設定（RotatingFileHandler）
+│   ├── routers/
+│   │   ├── dashboard.py         # GET /api/today, GET /api/stream (SSE)
+│   │   ├── tasks.py             # POST /api/tasks/*/complete|uncomplete
+│   │   └── health.py            # GET /api/health
+│   └── services/
+│       ├── google_calendar.py   # Google Calendar API クライアント
+│       └── icloud_reminders.py  # iCloud CalDAV クライアント
+├── static/
+│   ├── index.html               # メイン画面（PWA対応）
+│   ├── style.css                # ダークテーマCSS
+│   ├── app.js                   # SSEクライアント、認証、エラーUI
+│   ├── manifest.json            # PWAマニフェスト
+│   └── sw.js                    # Service Worker（オフラインキャッシュ）
+├── tests/
+│   ├── conftest.py              # テスト基盤（モック、フィクスチャ）
+│   ├── test_auth.py             # 認証テスト
+│   ├── test_dashboard.py        # ダッシュボードAPIテスト
+│   ├── test_tasks.py            # タスク操作テスト
+│   ├── test_database.py         # DB操作テスト
+│   ├── test_health.py           # ヘルスチェックテスト
+│   └── test_sse.py              # SSEテスト
+├── setup/
+│   └── com.family.dashboard.plist  # macOS 自動起動設定
+├── tokens/                      # Google OAuth トークン（git管理外）
+├── logs/                        # ログファイル（git管理外、自動生成）
+├── credentials.json             # Google OAuth クライアント情報（git管理外）
+├── .env                         # 環境変数（git管理外）
+├── .env.example                 # .env のテンプレート
+├── start.sh                     # Keychain連携の起動スクリプト
+├── setup_google_auth.py         # Google OAuth 初回認証スクリプト
+├── requirements.txt             # Python依存パッケージ（本番）
+├── requirements-dev.txt         # テスト用依存パッケージ
+└── dashboard.db                 # SQLite DB（git管理外、自動生成）
+```
+
+---
+
+## 4. セットアップ手順
+
+### 4.1 基本環境
+
+```bash
+git clone https://github.com/gakugaku3333/to_do_display.git
+cd to_do_display
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+### 4.2 Google Calendar 認証
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクト作成
+2. 「APIとサービス」→「ライブラリ」→ **Google Calendar API** を有効化
+3. 「OAuth 同意画面」→ 外部 → アプリ名等を入力 → テストユーザーに夫婦のGmailを追加
+4. 「認証情報」→「OAuth クライアント ID」→ **デスクトップアプリ** で作成
+5. JSONダウンロード → `credentials.json` としてプロジェクトルートに配置
+6. 初回認証（ブラウザが開く）:
+
+```bash
+python setup_google_auth.py husband
+python setup_google_auth.py wife
+```
+
+`tokens/husband.json`, `tokens/wife.json` が生成されれば成功。
+
+### 4.3 iCloud リマインダー認証
+
+1. iPhoneのリマインダーアプリで「**ストック**」「**フロー**」リストを作成
+2. [appleid.apple.com](https://appleid.apple.com/) → サインイン → **App用パスワード** を生成
+3. macOS Keychain に登録:
+
+```bash
+security add-generic-password -s "icloud-todo" -a "APPLE_ID" -w "your@icloud.com"
+security add-generic-password -s "icloud-todo" -a "APP_PASSWORD" -w "xxxx-xxxx-xxxx-xxxx"
+```
+
+> **注意:** `.env` に `ICLOUD_APPLE_ID` / `ICLOUD_APP_PASSWORD` を直接書く方法でも動作するが、Keychain経由を推奨。`start.sh` が Keychain から自動読み込みする。
+
+### 4.4 API認証の設定（任意）
+
+`.env` に `API_TOKEN` を設定すると全APIエンドポイントが認証必須になります。
+
+```bash
+# .env
+API_TOKEN=your_secret_token_here
+```
+
+空のままにすると認証は無効です（開発モード）。
+
+### 4.5 起動
+
+```bash
+# 開発時
+./start.sh --reload
+
+# 本番
+./start.sh
+```
+
+ブラウザで `http://localhost:8080` を開いて確認。
+
+---
+
+## 5. Mac mini 本番運用（自動起動）
+
+### launchd 設定
+
+```bash
+# plist を編集（YOUR_USERNAME とパスを実環境に合わせる）
+vi setup/com.family.dashboard.plist
+
+# 配置 & 有効化
+cp setup/com.family.dashboard.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.family.dashboard.plist
+```
+
+### plist 編集が必要な箇所
+
+| 項目 | 変更内容 |
+|------|----------|
+| `ProgramArguments[0]` | `.venv/bin/uvicorn` の絶対パスに変更 |
+| `WorkingDirectory` | 実際のプロジェクトパスに変更 |
+| `PATH` | `.venv/bin` を含めるよう変更 |
+
+### 運用コマンド
+
+```bash
+# 状態確認
+launchctl list | grep family
+
+# 停止
+launchctl unload ~/Library/LaunchAgents/com.family.dashboard.plist
+
+# 再起動
+launchctl unload ~/Library/LaunchAgents/com.family.dashboard.plist
+launchctl load ~/Library/LaunchAgents/com.family.dashboard.plist
+
+# ログ確認（アプリケーションログ）
+tail -f logs/dashboard.log
+
+# ログ確認（システムログ）
+tail -f /var/log/family-dashboard.log
+tail -f /var/log/family-dashboard.error.log
+```
+
+---
+
+## 6. 認証情報の管理
+
+### git管理外のファイル一覧（.gitignore）
+
+| ファイル | 内容 | 再取得方法 |
+|----------|------|-----------|
+| `.env` | 環境変数 | `.env.example` からコピーして編集 |
+| `credentials.json` | Google OAuthクライアント情報 | Google Cloud Console から再ダウンロード |
+| `tokens/*.json` | Google OAuthアクセストークン | `setup_google_auth.py` を再実行 |
+| `dashboard.db` | タスク完了状態DB | 自動生成（データは失われる） |
+| `logs/` | アプリケーションログ | 自動生成 |
+
+### Keychain に保存される情報
+
+| サービス名 | アカウント | 内容 |
+|------------|-----------|------|
+| `icloud-todo` | `APPLE_ID` | Apple ID メールアドレス |
+| `icloud-todo` | `APP_PASSWORD` | App用パスワード |
+
+---
+
+## 7. 技術的な補足
+
+### DB スキーマ（SQLite: dashboard.db）
+
+```sql
+CREATE TABLE IF NOT EXISTS task_completions (
+    task_id    TEXT PRIMARY KEY,
+    task_type  TEXT NOT NULL,   -- "stock" | "flow"
+    completed_at TEXT,          -- ISO 8601
+    due_date   TEXT             -- YYYY-MM-DD
+);
+```
+
+- WALモード有効（読み書き並行性向上）
+- 接続は一元管理（`get_connection()` で遅延初期化）
+- **ストックタスク**: 完了状態は永続（明示的に取消すまで残る）
+- **フロータスク**: 日付変更時に `cleanup_old_flow_completions()` で自動削除
+
+### SSE (Server-Sent Events)
+
+- `GET /api/stream` でクライアントが接続
+- 接続時に現在データを即送信、以降はデータ変更時にプッシュ
+- 30秒ごとにkeepaliveコメント送信（プロキシタイムアウト防止）
+- クライアントのキュー満杯時（maxsize=10）は自動切断
+- EventSourceはブラウザ側で自動再接続
+
+### API認証
+
+- `API_TOKEN` が空の場合、認証は完全に無効（開発モード）
+- 設定時: `Authorization: Bearer <token>` ヘッダーまたは `?token=<token>` クエリパラメータ
+- SSEはクエリパラメータ認証（EventSourceはヘッダー設定不可のため）
+- `/api/health` は認証不要（監視用）
+
+### PWA
+
+- `manifest.json` でフルスクリーン表示
+- Service Worker (`sw.js`) で静的アセットをcache-first、APIをnetwork-firstでキャッシュ
+- オフライン時は最後に取得したデータを表示
+
+---
+
+## 8. テスト
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
+```
+
+21テスト: 認証(5), ダッシュボード(3), タスク操作(4), DB(3), ヘルスチェック(2), SSE(4)
+
+---
+
+## 9. トラブルシューティング
+
+| 症状 | 原因と対処 |
+|------|-----------|
+| 画面に予定が表示されない | `logs/dashboard.log` 確認 → Google/iCloud の認証期限切れの可能性 |
+| `Keychain に認証情報が見つかりません` | `security add-generic-password` で再登録 |
+| Google認証でブラウザが開かない | `credentials.json` が配置されているか確認 |
+| タスク完了が反映されない | `dashboard.db` の権限確認。削除すれば再生成される |
+| Mac再起動後にサービスが起動しない | `launchctl list | grep family` で確認 |
+| タブレットからアクセスできない | Mac mini のIPアドレス確認 + ファイアウォールでport 8080を許可 |
+| SSEが接続できない | ステータスバナーに「接続が切れました」表示 → サーバー再起動を確認 |
+| 401エラー | `.env` の `API_TOKEN` を確認。空にすると認証無効 |
+| ヘルスチェックでdegraded | `curl /api/health` でどのサービスが失敗しているか確認 |
+
+---
+
+## 10. 主要ライブラリ
+
+| パッケージ | バージョン | 用途 |
+|-----------|-----------|------|
+| FastAPI | 0.115.0 | Webフレームワーク |
+| uvicorn | 0.30.6 | ASGIサーバー |
+| pydantic-settings | 2.4.0 | 設定管理（.env読み込み） |
+| aiosqlite | 0.20.0 | 非同期SQLite |
+| APScheduler | 3.10.4 | 定期実行スケジューラ |
+| google-api-python-client | 2.145.0 | Google Calendar API |
+| google-auth-oauthlib | 1.2.1 | Google OAuth2 認証 |
+| caldav | 1.3.9 | iCloud CalDAV クライアント |
+| pytest | 8.3.3 | テストフレームワーク（dev） |
+| httpx | 0.27.2 | テスト用HTTPクライアント（dev） |

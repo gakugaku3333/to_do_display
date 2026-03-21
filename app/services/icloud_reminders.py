@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import logging
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -7,12 +10,15 @@ from caldav.elements import dav
 from app.config import settings
 from app.models import Task
 
+logger = logging.getLogger(__name__)
+
 
 def _get_client() -> caldav.DAVClient:
     return caldav.DAVClient(
         url="https://caldav.icloud.com",
         username=settings.icloud_apple_id,
         password=settings.icloud_app_password,
+        timeout=15,
     )
 
 
@@ -24,8 +30,8 @@ def _find_reminder_list(principal: caldav.Principal, list_name: str) -> caldav.C
             name = props.get("{DAV:}displayname", "")
             if name == list_name:
                 return cal
-    except Exception as e:
-        print(f"[iCloud] リスト検索エラー: {e}")
+    except Exception:
+        logger.error("リスト '%s' の検索に失敗しました", list_name, exc_info=True)
     return None
 
 
@@ -75,8 +81,8 @@ def _parse_vtodo(todo_component, task_type: str, today: date) -> Task | None:
                 owner="shared",
             )
 
-    except Exception as e:
-        print(f"[iCloud] VTODO パースエラー: {e}")
+    except Exception:
+        logger.warning("VTODOのパースに失敗しました", exc_info=True)
     return None
 
 
@@ -86,7 +92,7 @@ def fetch_tasks(tz_name: str = "Asia/Tokyo") -> tuple[list[Task], list[Task]]:
     flow_tasks: list[Task] = []
 
     if not settings.icloud_apple_id or not settings.icloud_app_password:
-        print("[iCloud] 認証情報が設定されていません。ダミーデータを返します。")
+        logger.warning("iCloud認証情報が未設定です。ダミーデータを返します")
         return _dummy_tasks(today)
 
     try:
@@ -99,7 +105,7 @@ def fetch_tasks(tz_name: str = "Asia/Tokyo") -> tuple[list[Task], list[Task]]:
         ]:
             cal = _find_reminder_list(principal, list_name)
             if not cal:
-                print(f"[iCloud] リスト '{list_name}' が見つかりませんでした。")
+                logger.warning("リスト '%s' が見つかりませんでした", list_name)
                 continue
 
             todos = cal.todos()
@@ -110,8 +116,8 @@ def fetch_tasks(tz_name: str = "Asia/Tokyo") -> tuple[list[Task], list[Task]]:
                         if task:
                             target_list.append(task)
 
-    except Exception as e:
-        print(f"[iCloud] 取得エラー: {e}")
+    except Exception:
+        logger.error("iCloudタスクの取得に失敗しました", exc_info=True)
 
     return stock_tasks, flow_tasks
 

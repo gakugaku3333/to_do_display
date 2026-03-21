@@ -1,0 +1,8 @@
+{
+  "name": "家族ダッシュボード",
+  "short_name": "ダッシュボード",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117"
+}
