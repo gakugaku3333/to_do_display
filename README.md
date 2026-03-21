@@ -36,12 +36,10 @@ python setup_google_auth.py wife
 
 ### 4. Apple Reminders の設定
 
-1. iPhoneの「設定」→ Apple ID → 「iCloud」→「リマインダー」をオン
-2. [appleid.apple.com](https://appleid.apple.com) にログイン
-3. 「アプリ用パスワード」を生成
-4. `.env` の `ICLOUD_APP_PASSWORD` に設定
-5. Apple Reminders アプリで「ストック」「フロー」リストを作成（名前は `.env` の `STOCK_LIST_NAME` / `FLOW_LIST_NAME` と一致させる）
-6. 夫婦間でリストを共有
+1. iPhoneのリマインダーアプリで「ストック」「フロー」リストを作成（名前は `.env` の `STOCK_LIST_NAME` / `FLOW_LIST_NAME` と一致させる）
+2. Mac mini 上で Reminders.app が iCloud と同期していることを確認
+3. 夫婦間でリストを共有
+4. 追加の認証設定は不要（macOS の AppleScript 経由でアクセス）
 
 ### 5. サーバー起動
 
@@ -54,9 +52,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080
 ### 6. Mac mini 自動起動設定
 
 ```bash
-# setup/com.family.dashboard.plist の WorkingDirectory と ProgramArguments を編集
-# YOUR_USERNAME を実際のユーザー名に変更
-
 cp setup/com.family.dashboard.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.family.dashboard.plist
 ```

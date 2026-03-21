@@ -140,7 +140,6 @@ iCloud CalDAV は iOS 13+ で非対応のため、**macOS ネイティブの App
 > **注意:**
 > - 初回起動時や Reminders.app が長時間停止していた場合、iCloud 同期に1〜5分かかります
 > - Mac mini で常時運用する場合、Reminders.app は常駐するため問題ありません
-> - `.env` の `ICLOUD_APPLE_ID` / `ICLOUD_APP_PASSWORD` は CalDAV 時代の名残で、現在は使用していません
 
 ### 4.4 API認証の設定（任意）
 
