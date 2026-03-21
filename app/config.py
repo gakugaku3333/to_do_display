@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     flow_list_name: str = "フロー"
     timezone: str = "Asia/Tokyo"
     port: int = 8080
+    api_token: str = ""
+    log_level: str = "INFO"
 
 
 settings = Settings()

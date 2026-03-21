@@ -1,49 +1,62 @@
-from datetime import date
+import asyncio
+import logging
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 
-from app.database import get_completed_ids
+from app.auth import verify_token
+from app.data_assembler import get_current_data, get_empty_data
 from app.models import TodayData
-from app.scheduler import get_cached_data, refresh_data
+from app.scheduler import refresh_data
+from app.sse import sse_manager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-WEEKDAYS_JA = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
 
-
-@router.get("/api/today", response_model=TodayData)
+@router.get("/api/today", response_model=TodayData, dependencies=[Depends(verify_token)])
 async def get_today():
-    data = get_cached_data()
+    data = await get_current_data()
     if data is None:
         await refresh_data()
-        data = get_cached_data()
-
+        data = await get_current_data()
     if data is None:
-        today = date.today()
-        data = TodayData(
-            date=today.isoformat(),
-            weekday=WEEKDAYS_JA[today.weekday()],
-            events=[],
-            stock_tasks=[],
-            flow_tasks=[],
-        )
+        data = get_empty_data()
+    return data
 
-    completed_ids = await get_completed_ids()
 
-    updated_stock = [
-        t.model_copy(update={"is_completed": t.id in completed_ids})
-        for t in data.stock_tasks
-    ]
-    updated_flow = [
-        t.model_copy(update={"is_completed": t.id in completed_ids})
-        for t in data.flow_tasks
-    ]
+@router.get("/api/stream", dependencies=[Depends(verify_token)])
+async def event_stream(request: Request):
+    queue = sse_manager.connect()
 
-    return TodayData(
-        date=data.date,
-        weekday=data.weekday,
-        events=data.events,
-        stock_tasks=updated_stock,
-        flow_tasks=updated_flow,
+    async def generate():
+        try:
+            # 初回接続時に現在データを即送信
+            data = await get_current_data()
+            if data is None:
+                data = get_empty_data()
+            yield f"data: {data.model_dump_json()}\n\n"
+
+            while True:
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"data: {msg}\n\n"
+                except asyncio.TimeoutError:
+                    # keepalive（プロキシ/ブラウザのタイムアウト防止）
+                    yield ": keepalive\n\n"
+
+                # クライアント切断チェック
+                if await request.is_disconnected():
+                    break
+        finally:
+            sse_manager.disconnect(queue)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )

@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import logging
 import os
 from datetime import datetime, date, timezone
 from zoneinfo import ZoneInfo
@@ -8,6 +11,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from app.models import CalendarEvent
+
+logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 TOKENS_DIR = "tokens"
@@ -34,6 +39,7 @@ def get_credentials(account_name: str) -> Credentials | None:
             with open(token_path, "w") as f:
                 f.write(creds.to_json())
         except Exception:
+            logger.warning("%s のトークン更新に失敗しました", account_name, exc_info=True)
             creds = None
 
     return creds if (creds and creds.valid) else None
@@ -52,7 +58,7 @@ def setup_google_auth(account_name: str):
     token_path = os.path.join(TOKENS_DIR, f"{account_name}.json")
     with open(token_path, "w") as f:
         f.write(creds.to_json())
-    print(f"認証完了: {token_path} に保存しました。")
+    logger.info("認証完了: %s に保存しました", token_path)
 
 
 def _parse_event(event: dict, owner: str, tz: ZoneInfo) -> CalendarEvent:
@@ -117,8 +123,8 @@ def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
                     if event_id not in seen_ids:
                         seen_ids.add(event_id)
                         all_events.append(_parse_event(event, account_name, tz))
-        except Exception as e:
-            print(f"[Google Calendar] {account_name} の取得エラー: {e}")
+        except Exception:
+            logger.error("%s のカレンダー取得に失敗しました", account_name, exc_info=True)
 
     all_events.sort(key=lambda e: (e.start_time is None, e.start_time or ""))
     return all_events

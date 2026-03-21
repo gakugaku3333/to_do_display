@@ -30,6 +30,34 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ===== STATUS BANNER ===== */
+#status-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 0.85rem;
+  z-index: 1000;
+  transition: transform 0.3s ease;
+}
+
+#status-banner.hidden {
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+
+#status-banner.warning {
+  background: #d29922;
+  color: #000;
+}
+
+#status-banner.error {
+  background: #f85149;
+  color: #fff;
+}
+
 /* ===== HEADER ===== */
 #header {
   display: flex;
