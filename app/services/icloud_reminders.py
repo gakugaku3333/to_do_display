@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # CalDAV は iOS 13+ / macOS Catalina 以降、Apple Reminders に非対応のため使用不可。
 
 _SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "fetch_reminders.applescript"
+_COMPLETE_SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "complete_reminder.applescript"
 
 # 初回実行は iCloud 同期で 1〜3 分かかることがある
 _OSASCRIPT_TIMEOUT = 180
@@ -129,6 +130,33 @@ def fetch_tasks() -> tuple[list[Task], list[Task]]:
         len(flow_tasks),
     )
     return stock_tasks, flow_tasks
+
+
+def set_reminder_completed(task_id: str, completed: bool) -> bool:
+    """Reminders.app のタスク完了状態を更新する。成功時 True を返す。"""
+    if sys.platform != "darwin":
+        return False
+    try:
+        result = subprocess.run(
+            ["osascript", str(_COMPLETE_SCRIPT_PATH), task_id, str(completed).lower()],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            logger.error("complete_reminder.applescript エラー (id=%s): %s", task_id, result.stderr.strip())
+            return False
+        output = result.stdout.strip()
+        if output == "not_found":
+            logger.warning("Reminders でタスクが見つかりません (id=%s)", task_id)
+            return False
+        return True
+    except subprocess.TimeoutExpired:
+        logger.error("complete_reminder.applescript タイムアウト (id=%s)", task_id)
+        return False
+    except Exception:
+        logger.error("Reminders 完了状態の更新に失敗 (id=%s)", task_id, exc_info=True)
+        return False
 
 
 def _dummy_tasks(today: date) -> tuple[list[Task], list[Task]]:
