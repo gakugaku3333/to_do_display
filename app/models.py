@@ -31,3 +31,4 @@ class TodayData(BaseModel):
     events: list[CalendarEvent]
     stock_tasks: list[Task]
     flow_tasks: list[Task]
+    last_refresh: str | None = None  # HH:MM (Asia/Tokyo)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -39,14 +40,16 @@ async def refresh_data():
     except Exception:
         logger.error("iCloud Reminders の取得に失敗しました", exc_info=True)
 
+    now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
     _cached_data = TodayData(
         date=today_str,
         weekday=weekday_ja,
         events=events,
         stock_tasks=stock_tasks,
         flow_tasks=flow_tasks,
+        last_refresh=now_jst.strftime("%H:%M"),
     )
-    _last_refresh = datetime.now(timezone.utc)
+    _last_refresh = now_jst
     logger.info("データ更新完了: %s %s", today_str, weekday_ja)
 
     await broadcast_current_data()

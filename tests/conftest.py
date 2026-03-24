@@ -64,7 +64,8 @@ async def _create_test_client(api_token: str = ""):
     config_module.settings.api_token = api_token
 
     with patch("app.services.google_calendar.fetch_today_events", _mock_fetch_today_events), \
-         patch("app.services.icloud_reminders.fetch_tasks", _mock_fetch_tasks):
+         patch("app.services.icloud_reminders.fetch_tasks", _mock_fetch_tasks), \
+         patch("app.services.icloud_reminders.set_reminder_completed", return_value=True):
 
         from app.main import app as fastapi_app
 

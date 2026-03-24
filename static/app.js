@@ -41,6 +41,11 @@ function updateDateDisplay(data) {
   const month = d.getMonth() + 1;
   const day = d.getDate();
   dateEl.innerHTML = `${year}年${month}月${day}日<br>${data.weekday}`;
+
+  const refreshEl = document.getElementById('last-refresh');
+  if (data.last_refresh) {
+    refreshEl.textContent = `更新 ${data.last_refresh}`;
+  }
 }
 
 // ===== イベント描画 =====

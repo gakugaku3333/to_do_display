@@ -84,19 +84,11 @@ html, body {
   text-align: right;
 }
 
-#refresh-indicator {
-  font-size: 0.8rem;
+#last-refresh {
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-#refresh-indicator.hidden {
-  visibility: hidden;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  opacity: 0.6;
+  margin-top: 2px;
 }
 
 /* ===== MAIN LAYOUT ===== */
