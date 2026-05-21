@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "fetch_reminders.applescript"
 _COMPLETE_SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "complete_reminder.applescript"
+_CREATE_SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "create_reminder.applescript"
 
 # 初回実行は iCloud 同期で 1〜3 分かかることがある
 _OSASCRIPT_TIMEOUT = 180
@@ -157,6 +158,43 @@ def set_reminder_completed(task_id: str, completed: bool) -> bool:
     except Exception:
         logger.error("Reminders 完了状態の更新に失敗 (id=%s)", task_id, exc_info=True)
         return False
+
+
+def create_reminder(
+    list_name: str,
+    title: str,
+    body: str = "",
+    due_date: str | None = None,
+) -> str | None:
+    """Reminders.app に新規リマインダーを作成する。成功時は新ID、失敗時は None。"""
+    if sys.platform != "darwin":
+        logger.warning("macOS 以外では Reminders を作成できません")
+        return None
+    due_arg = due_date if due_date else "null"
+    try:
+        result = subprocess.run(
+            ["osascript", str(_CREATE_SCRIPT_PATH), list_name, title, body, due_arg],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            logger.error(
+                "create_reminder.applescript エラー (list=%s, title=%s): %s",
+                list_name, title, result.stderr.strip(),
+            )
+            return None
+        output = result.stdout.strip()
+        if output.startswith("error:"):
+            logger.error("Reminders作成エラー: %s", output)
+            return None
+        return output
+    except subprocess.TimeoutExpired:
+        logger.error("create_reminder.applescript タイムアウト (title=%s)", title)
+        return None
+    except Exception:
+        logger.error("Reminders作成に失敗 (title=%s)", title, exc_info=True)
+        return None
 
 
 def _dummy_tasks(today: date) -> tuple[list[Task], list[Task]]:

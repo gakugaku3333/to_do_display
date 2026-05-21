@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import close_connection, init_db
 from app.logging_config import setup_logging
-from app.routers import dashboard, health, tasks
+from app.routers import dashboard, health, reminders, tasks
 from app.scheduler import refresh_data, start_scheduler, stop_scheduler
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ app = FastAPI(title="Family Dashboard", lifespan=lifespan)
 app.include_router(dashboard.router)
 app.include_router(tasks.router)
 app.include_router(health.router)
+app.include_router(reminders.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
