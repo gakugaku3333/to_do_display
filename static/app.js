@@ -156,6 +156,102 @@ function renderTasks(tasks, listId) {
   }
 }
 
+// ===== 学校配布物 提案 =====
+let currentProposals = [];
+let currentProposalIndex = 0;
+
+const CHILD_COLORS = {
+  '紗奈': '#9b59b6',
+  '和花': '#27ae60',
+  '舞':   '#e67e22',
+};
+
+function openProposalsModal() {
+  if (currentProposals.length === 0) return;
+  currentProposalIndex = 0;
+  renderProposalCard();
+  document.getElementById('proposals-overlay').classList.remove('hidden');
+}
+
+function closeProposalsModal() {
+  document.getElementById('proposals-overlay').classList.add('hidden');
+}
+
+function renderProposalCard() {
+  const proposal = currentProposals[currentProposalIndex];
+  const counter = document.getElementById('proposals-counter');
+  counter.textContent = `${currentProposalIndex + 1} / ${currentProposals.length}`;
+
+  const card = document.getElementById('proposals-card');
+  const color = CHILD_COLORS[proposal.child_name] || '#888';
+  const dateStr = proposal.event_date.replace(/-/g, '/');
+  const timeStr = proposal.time_start
+    ? (proposal.time_end ? `${proposal.time_start}〜${proposal.time_end}` : proposal.time_start)
+    : '終日';
+
+  card.innerHTML = `
+    <div class="proposal-child-badge" style="background:${color}">${proposal.child_name}</div>
+    <div class="proposal-event-title">${proposal.title}</div>
+    <div class="proposal-meta">
+      <span class="proposal-date">📅 ${dateStr}</span>
+      <span class="proposal-time">🕐 ${timeStr}</span>
+    </div>
+    ${proposal.location ? `<div class="proposal-location">📍 ${proposal.location}</div>` : ''}
+    ${proposal.description ? `<div class="proposal-desc">${proposal.description}</div>` : ''}
+    ${proposal.image_filename ? `<div class="proposal-source">配布物: ${proposal.image_filename}</div>` : ''}
+  `;
+}
+
+async function handleProposalAction(action) {
+  const proposal = currentProposals[currentProposalIndex];
+  const endpoint = `/api/proposals/${proposal.id}/${action}`;
+
+  try {
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+  } catch (e) {
+    showStatusBanner('処理に失敗しました', 'error');
+    setTimeout(hideStatusBanner, 3000);
+    return;
+  }
+
+  // 次の提案へ or モーダルを閉じる
+  currentProposals.splice(currentProposalIndex, 1);
+  if (currentProposals.length === 0) {
+    closeProposalsModal();
+    updateProposalsBadge();
+  } else {
+    if (currentProposalIndex >= currentProposals.length) {
+      currentProposalIndex = currentProposals.length - 1;
+    }
+    renderProposalCard();
+  }
+}
+
+function updateProposalsBadge() {
+  const badge = document.getElementById('proposals-badge');
+  if (currentProposals.length > 0) {
+    badge.textContent = `📄 ${currentProposals.length}`;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function syncProposals(proposals) {
+  currentProposals = proposals || [];
+  updateProposalsBadge();
+}
+
+document.getElementById('btn-approve').addEventListener('click', () => handleProposalAction('approve'));
+document.getElementById('btn-reject').addEventListener('click', () => handleProposalAction('reject'));
+document.getElementById('proposals-badge').addEventListener('click', openProposalsModal);
+document.getElementById('proposals-overlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('proposals-overlay')) closeProposalsModal();
+});
+
 // ===== 統合描画 =====
 function renderAll(data) {
   updateDateDisplay(data);
@@ -163,6 +259,7 @@ function renderAll(data) {
   renderTasks(data.stock_tasks, 'stock-list');
   renderTasks(data.flow_tasks, 'flow-list');
   document.getElementById('flow-title').textContent = `🔄 ${data.weekday}のタスク`;
+  syncProposals(data.proposals || []);
 }
 
 // ===== タップ処理（重複排除付き） =====

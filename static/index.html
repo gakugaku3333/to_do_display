@@ -42,6 +42,26 @@
     </div>
   </main>
 
+  <!-- 学校配布物 提案モーダル -->
+  <div id="proposals-overlay" class="hidden">
+    <div id="proposals-modal">
+      <div id="proposals-header">
+        <span id="proposals-title">📄 学校配布物の予定</span>
+        <span id="proposals-counter"></span>
+      </div>
+      <div id="proposals-card-area">
+        <div id="proposals-card"></div>
+      </div>
+      <div id="proposals-actions">
+        <button id="btn-reject" class="proposal-btn reject-btn">✕ 却下</button>
+        <button id="btn-approve" class="proposal-btn approve-btn">✓ カレンダーに追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提案バッジ（通知ドット） -->
+  <button id="proposals-badge" class="hidden" aria-label="学校配布物の提案を確認"></button>
+
   <script src="/static/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

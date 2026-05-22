@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.database import get_completed_ids
-from app.models import TodayData, WEEKDAYS_JA
+from app.database import get_completed_ids, get_pending_proposals
+from app.models import EventProposal, TodayData, WEEKDAYS_JA
 
 
 async def get_current_data() -> TodayData | None:
-    """キャッシュデータに完了状態をマージして返す"""
+    """キャッシュデータに完了状態・提案をマージして返す"""
     from app.scheduler import get_cached_data
 
     data = get_cached_data()
@@ -15,6 +15,7 @@ async def get_current_data() -> TodayData | None:
         return None
 
     completed_ids = await get_completed_ids()
+    pending = await get_pending_proposals()
 
     updated_stock = [
         t.model_copy(update={"is_completed": t.id in completed_ids})
@@ -25,12 +26,16 @@ async def get_current_data() -> TodayData | None:
         for t in data.flow_tasks
     ]
 
+    proposals = [EventProposal(**p) for p in pending]
+
     return TodayData(
         date=data.date,
         weekday=data.weekday,
         events=data.events,
         stock_tasks=updated_stock,
         flow_tasks=updated_flow,
+        last_refresh=data.last_refresh,
+        proposals=proposals,
     )
 
 

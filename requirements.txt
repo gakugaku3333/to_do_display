@@ -5,3 +5,5 @@ aiosqlite==0.20.0
 apscheduler==3.10.4
 google-auth-oauthlib==1.2.1
 google-api-python-client==2.145.0
+google-generativeai==0.8.3
+python-multipart==0.0.12

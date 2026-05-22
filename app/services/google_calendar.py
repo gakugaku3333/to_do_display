@@ -14,7 +14,10 @@ from app.models import CalendarEvent
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/calendar.events",
+]
 TOKENS_DIR = "tokens"
 CREDENTIALS_FILE = "credentials.json"
 
@@ -86,6 +89,40 @@ def _parse_event(event: dict, owner: str, tz: ZoneInfo) -> CalendarEvent:
             owner=owner,
             color=OWNER_COLORS.get(owner, "#888888"),
         )
+
+
+def create_calendar_event(
+    title: str,
+    event_date: str,
+    time_start: str | None,
+    time_end: str | None,
+    location: str | None,
+    description: str | None,
+    tz_name: str = "Asia/Tokyo",
+) -> str:
+    """Google Calendarにイベントを作成し、イベントIDを返す（夫アカウントのプライマリカレンダーに追加）"""
+    creds = get_credentials("husband")
+    if not creds:
+        raise RuntimeError("husband のGoogle認証情報が取得できません")
+
+    service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+
+    if time_start:
+        start = {"dateTime": f"{event_date}T{time_start}:00", "timeZone": tz_name}
+        end_time = time_end or time_start
+        end = {"dateTime": f"{event_date}T{end_time}:00", "timeZone": tz_name}
+    else:
+        start = {"date": event_date}
+        end = {"date": event_date}
+
+    body: dict = {"summary": title, "start": start, "end": end}
+    if location:
+        body["location"] = location
+    if description:
+        body["description"] = description
+
+    result = service.events().insert(calendarId="primary", body=body).execute()
+    return result["id"]
 
 
 def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
