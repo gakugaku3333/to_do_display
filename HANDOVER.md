@@ -8,7 +8,8 @@
 
 - 夫婦のGoogleカレンダー予定を色分け表示（夫: 青、妻: ピンク）
 - iCloudリマインダーを「ストック（期限ベース）」「フロー（当日のみ）」の2カテゴリで表示
-- タスクのタップ完了 / 取消（即座にUI反映、エラー時ロールバック）
+- **タスクのタップ完了**（フェードアウトでリストから消え、Reminders.appにも同期）
+- **久留米市の天気予報**（毎朝6:15取得、天気概況・最高最低気温・時間別降水確率）
 - **SSE（Server-Sent Events）によるリアルタイム更新**
 - **トークンベースのAPI認証**
 - **PWA対応**（フルスクリーン、オフラインキャッシュ）
@@ -30,19 +31,22 @@ Android タブレット (ブラウザ / PWA)
 Mac mini (FastAPI + uvicorn)
         │
         ├── SSEManager              → 接続中クライアントへブロードキャスト
-        ├── APScheduler             → 5分ごとに外部データ取得
+        ├── APScheduler             → 5分ごとにデータ取得 / 毎朝6:15に天気取得
         ├── Google Calendar API     → OAuth2（夫・妻各アカウント）
         ├── Apple Reminders         → AppleScript (osascript) 経由
+        ├── Open-Meteo API          → 久留米市の天気予報（APIキー不要）
         └── SQLite (dashboard.db)   → タスク完了状態の永続化（WALモード）
 ```
 
 ### データフロー
 
 1. **APScheduler** が5分ごとに Google Calendar / iCloud からデータ取得 → メモリキャッシュに保存
-2. データ更新完了時に **SSE** で全接続クライアントにプッシュ配信
-3. タスク完了操作は即座に SQLite に書き込み → SSEで全クライアントに反映
-4. フロータスクの完了状態は日付変更時に自動リセット
-5. フロントエンドはSSE接続のみ（初回データもSSE経由で即配信）
+2. **毎朝6:15 JST** に Open-Meteo から天気を取得 → `_cached_weather` に保存（起動時も即取得）
+3. データ更新完了時に **SSE** で全接続クライアントにプッシュ配信
+4. タスク完了操作は即座に SQLite に書き込み → SSEで全クライアントに反映（完了タスクはリストから除外）
+5. Reminders.app への完了書き戻しは非同期（AppleScript）
+6. フロータスクの完了状態は日付変更時に自動リセット
+7. フロントエンドはSSE接続のみ（初回データもSSE経由で即配信）
 
 ---
 
@@ -55,9 +59,9 @@ to_do_display/
 │   ├── config.py                # pydantic-settings による設定読み込み
 │   ├── models.py                # データモデル（CalendarEvent, Task, TodayData）
 │   ├── database.py              # SQLite操作（接続一元管理、WALモード）
-│   ├── scheduler.py             # APScheduler（5分間隔のデータ更新）
+│   ├── scheduler.py             # APScheduler（5分間隔 + 毎朝6:15天気更新）
 │   ├── sse.py                   # SSEManager（クライアント接続管理、ブロードキャスト）
-│   ├── data_assembler.py        # キャッシュ + 完了状態マージの共通ロジック
+│   ├── data_assembler.py        # キャッシュ + 完了状態フィルタリングの共通ロジック
 │   ├── auth.py                  # トークン認証（Bearer / query param）
 │   ├── logging_config.py        # ロギング設定（RotatingFileHandler）
 │   ├── routers/
@@ -66,7 +70,8 @@ to_do_display/
 │   │   └── health.py            # GET /api/health
 │   └── services/
 │       ├── google_calendar.py   # Google Calendar API クライアント
-│       └── icloud_reminders.py  # Apple Reminders (AppleScript経由)
+│       ├── icloud_reminders.py  # Apple Reminders (AppleScript経由)
+│       └── weather.py           # Open-Meteo 天気予報（APIキー不要）
 ├── static/
 │   ├── index.html               # メイン画面（PWA対応）
 │   ├── style.css                # ダークテーマCSS
@@ -303,6 +308,8 @@ python -m pytest tests/ -v
 | 症状 | 原因と対処 |
 |------|-----------|
 | 予定が急に表示されなくなった | Google OAuth トークン期限切れ（約6ヶ月）。`logs/dashboard.log` で `invalid_grant` 確認。`python setup_google_auth.py husband` で再認証 |
+| 天気が表示されない / 古い | `python3 -c "from app.services.weather import fetch_weather; print(fetch_weather())"` で単体確認。ネットワーク問題ならサーバー再起動で再取得 |
+| 完了済みタスクがリストに残る | `data_assembler.py` が `filter out` でなく `mark only` になっていないか確認 |
 | リマインダーが表示されない | 起動後1〜5分待つ（iCloud同期中）。`logs/dashboard.log` で "Reminders 取得完了" を確認 |
 | リマインダーがタイムアウトし続ける | Reminders.app が固まっている。`killall Reminders && open -a Reminders` で再起動 |
 | コード修正しても画面が変わらない | Service Worker キャッシュ。**2回リロード**（1回目:新SW起動、2回目:新JS反映）。確実には Safari > 開発 > キャッシュを空にする |
