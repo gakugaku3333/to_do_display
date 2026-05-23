@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -39,6 +39,17 @@ app.include_router(health.router)
 app.include_router(school_docs.router)
 app.include_router(reminders.router)
 
+# Service Worker は常に再検証させ、更新を確実に検知させる。
+# （StaticFiles のデフォルトでは no-cache が付かないため専用ルートで配信）
+@app.get("/static/sw.js")
+async def service_worker():
+    return FileResponse(
+        "static/sw.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -46,4 +57,5 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def root():
     html = Path("static/index.html").read_text(encoding="utf-8")
     html = html.replace("__API_TOKEN__", settings.api_token)
-    return HTMLResponse(html)
+    # index.html は常に最新を配信（SW 登録スクリプトやアセット参照の更新を反映）
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})

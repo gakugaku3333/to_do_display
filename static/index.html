@@ -65,6 +65,14 @@
   <script src="/static/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
+      // 新しい Service Worker がコントローラを取得したら一度だけリロードして反映。
+      // （多重リロードを防ぐため refreshing フラグでガード）
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
       navigator.serviceWorker.register('/static/sw.js');
     }
   </script>

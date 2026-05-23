@@ -82,7 +82,9 @@ to_do_display/
 │   ├── test_health.py           # ヘルスチェックテスト
 │   └── test_sse.py              # SSEテスト
 ├── scripts/
-│   └── fetch_reminders.applescript  # Reminders取得用AppleScript
+│   ├── fetch_reminders.applescript    # Reminders取得（バッチ一括取得で高速化）
+│   ├── complete_reminder.applescript  # タスク完了状態の書き戻し
+│   └── create_reminder.applescript    # 新規リマインダー作成
 ├── setup/
 │   └── com.family.dashboard.plist  # macOS 自動起動設定
 ├── tokens/                      # Google OAuth トークン（git管理外）
@@ -265,8 +267,23 @@ CREATE TABLE IF NOT EXISTS task_completions (
 ### PWA
 
 - `manifest.json` でフルスクリーン表示
-- Service Worker (`sw.js`) で静的アセットをcache-first、APIをnetwork-firstでキャッシュ
+- Service Worker (`sw.js`) によるオフライン対応とキャッシュ管理
 - オフライン時は最後に取得したデータを表示
+
+#### Service Worker キャッシュ戦略
+
+| リソース | 戦略 | 理由 |
+|---------|------|------|
+| `/`（ナビゲーション） | **network-first** | HTML/トークン変更を即反映 |
+| `/static/app.js` | **network-first** | JS 修正を即反映（cache-first だと更新が伝わらない） |
+| `/static/*.css`, manifest 等 | stale-while-revalidate | 表示を犠牲にせず裏で更新 |
+| `/api/*` | network-first | 常に最新データ |
+| `/api/stream` (SSE) | SW を通さない | ストリームを途切れさせない |
+
+**重要**: `sw.js` と `index.html` は FastAPI の専用ルートで `Cache-Control: no-cache` で配信。
+これによりブラウザが必ず再検証し、SW の更新を確実に検知する。
+
+新しい SW がデプロイされると、既存タブで `controllerchange` イベントが発火し自動リロードされる。
 
 ---
 
@@ -285,11 +302,14 @@ python -m pytest tests/ -v
 
 | 症状 | 原因と対処 |
 |------|-----------|
-| 画面に予定が表示されない | `logs/dashboard.log` 確認 → Google認証期限切れ or Reminders同期中の可能性 |
+| 予定が急に表示されなくなった | Google OAuth トークン期限切れ（約6ヶ月）。`logs/dashboard.log` で `invalid_grant` 確認。`python setup_google_auth.py husband` で再認証 |
 | リマインダーが表示されない | 起動後1〜5分待つ（iCloud同期中）。`logs/dashboard.log` で "Reminders 取得完了" を確認 |
+| リマインダーがタイムアウトし続ける | Reminders.app が固まっている。`killall Reminders && open -a Reminders` で再起動 |
+| コード修正しても画面が変わらない | Service Worker キャッシュ。**2回リロード**（1回目:新SW起動、2回目:新JS反映）。確実には Safari > 開発 > キャッシュを空にする |
+| flow-title が「本日の曜日タスク」のまま | JS が途中でクラッシュしているサイン。`updateDateDisplay` の innerHTML 問題が再発していないか確認 |
 | Google認証でブラウザが開かない | `credentials.json` が配置されているか確認 |
 | タスク完了が反映されない | `dashboard.db` の権限確認。削除すれば再生成される |
-| Mac再起動後にサービスが起動しない | `launchctl list | grep family` で確認 |
+| Mac再起動後にサービスが起動しない | `launchctl list \| grep family` で確認 |
 | タブレットからアクセスできない | Mac mini のIPアドレス確認 + ファイアウォールでport 8080を許可 |
 | SSEが接続できない | ステータスバナーに「接続が切れました」表示 → サーバー再起動を確認 |
 | 401エラー | `.env` の `API_TOKEN` を確認。空にすると認証無効 |

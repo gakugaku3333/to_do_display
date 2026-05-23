@@ -4,6 +4,7 @@ import json
 import logging
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -19,8 +20,8 @@ _SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "fetc
 _COMPLETE_SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "complete_reminder.applescript"
 _CREATE_SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "create_reminder.applescript"
 
-# 初回実行は iCloud 同期で 1〜3 分かかることがある
-_OSASCRIPT_TIMEOUT = 180
+# 初回実行は iCloud 同期で時間がかかることがある
+_OSASCRIPT_TIMEOUT = 120
 
 
 def _fetch_reminders_from_list(list_name: str) -> list[dict]:
@@ -106,24 +107,31 @@ def _parse_reminder(rem: dict, task_type: str, today: date) -> Task | None:
 
 
 def fetch_tasks() -> tuple[list[Task], list[Task]]:
-    """ストック・フロー両リストからタスクを取得する"""
+    """ストック・フロー両リストからタスクを並列取得する"""
     today = date.today()
-    stock_tasks: list[Task] = []
-    flow_tasks: list[Task] = []
 
     if sys.platform != "darwin":
         logger.warning("macOS 以外では Reminders にアクセスできません。ダミーデータを返します")
         return _dummy_tasks(today)
 
-    for list_name, task_type, target_list in [
-        (settings.stock_list_name, "stock", stock_tasks),
-        (settings.flow_list_name, "flow", flow_tasks),
-    ]:
-        reminders = _fetch_reminders_from_list(list_name)
-        for rem in reminders:
-            task = _parse_reminder(rem, task_type, today)
-            if task:
-                target_list.append(task)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        stock_future = executor.submit(_fetch_reminders_from_list, settings.stock_list_name)
+        flow_future = executor.submit(_fetch_reminders_from_list, settings.flow_list_name)
+        stock_rems = stock_future.result()
+        flow_rems = flow_future.result()
+
+    stock_tasks: list[Task] = []
+    flow_tasks: list[Task] = []
+
+    for rem in stock_rems:
+        task = _parse_reminder(rem, "stock", today)
+        if task:
+            stock_tasks.append(task)
+
+    for rem in flow_rems:
+        task = _parse_reminder(rem, "flow", today)
+        if task:
+            flow_tasks.append(task)
 
     logger.info(
         "Reminders 取得完了: ストック=%d件, フロー=%d件",

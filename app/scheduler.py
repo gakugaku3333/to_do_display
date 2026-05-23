@@ -64,7 +64,7 @@ def get_last_refresh() -> datetime | None:
 
 
 def start_scheduler():
-    _scheduler.add_job(refresh_data, "interval", minutes=5, id="refresh_data")
+    _scheduler.add_job(refresh_data, "interval", minutes=5, id="refresh_data", max_instances=1, coalesce=True)
     _scheduler.start()
 
 

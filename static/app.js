@@ -40,12 +40,9 @@ function updateDateDisplay(data) {
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const day = d.getDate();
-  dateEl.innerHTML = `${year}年${month}月${day}日<br>${data.weekday}`;
-
-  const refreshEl = document.getElementById('last-refresh');
-  if (data.last_refresh) {
-    refreshEl.textContent = `更新 ${data.last_refresh}`;
-  }
+  const refreshText = data.last_refresh ? `更新 ${data.last_refresh}` : '';
+  // innerHTML で date-info を更新する際、last-refresh も一緒に再生成する
+  dateEl.innerHTML = `<div>${year}年${month}月${day}日<br>${data.weekday}</div><div id="last-refresh">${refreshText}</div>`;
 }
 
 // ===== イベント描画 =====
