@@ -66,6 +66,10 @@ def _parse_reminder(rem: dict, task_type: str, today: date) -> Task | None:
         completed = rem.get("completed", False)
         due_str = rem.get("dueDate")
 
+        # 完了済みタスクは表示しない
+        if completed:
+            return None
+
         due_date: date | None = None
         due_date_str: str | None = None
         if due_str:
