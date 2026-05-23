@@ -207,7 +207,7 @@ html, body {
   border-bottom: 1px solid var(--border);
   min-height: 64px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, opacity 0.35s ease, transform 0.35s ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -229,7 +229,9 @@ html, body {
 }
 
 .task-item.completed {
-  opacity: var(--completed-opacity);
+  opacity: 0;
+  transform: translateX(8px);
+  pointer-events: none;  /* 二重タップ防止 */
 }
 
 .task-checkbox {

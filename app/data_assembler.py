@@ -17,14 +17,9 @@ async def get_current_data() -> TodayData | None:
     completed_ids = await get_completed_ids()
     pending = await get_pending_proposals()
 
-    updated_stock = [
-        t.model_copy(update={"is_completed": t.id in completed_ids})
-        for t in data.stock_tasks
-    ]
-    updated_flow = [
-        t.model_copy(update={"is_completed": t.id in completed_ids})
-        for t in data.flow_tasks
-    ]
+    # ダッシュボードでチェック済みのタスクはリストから除外（フェードアウト後に消える）
+    updated_stock = [t for t in data.stock_tasks if t.id not in completed_ids]
+    updated_flow = [t for t in data.flow_tasks if t.id not in completed_ids]
 
     proposals = [EventProposal(**p) for p in pending]
 
