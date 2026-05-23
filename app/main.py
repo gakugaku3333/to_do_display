@@ -11,7 +11,7 @@ from app.config import settings
 from app.database import close_connection, init_db
 from app.logging_config import setup_logging
 from app.routers import dashboard, health, reminders, school_docs, tasks
-from app.scheduler import refresh_data, start_scheduler, stop_scheduler
+from app.scheduler import refresh_data, refresh_weather, start_scheduler, stop_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     start_scheduler()
     # 初回データ取得はバックグラウンドで実行（Reminders 同期に数分かかる場合がある）
+    asyncio.create_task(refresh_weather())
     asyncio.create_task(refresh_data())
     logger.info("ダッシュボード起動完了（データ取得はバックグラウンドで実行中）")
     yield

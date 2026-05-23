@@ -31,6 +31,7 @@ async def get_current_data() -> TodayData | None:
         flow_tasks=updated_flow,
         last_refresh=data.last_refresh,
         proposals=proposals,
+        weather=data.weather,
     )
 
 

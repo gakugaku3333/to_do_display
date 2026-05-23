@@ -9,14 +9,30 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.data_assembler import broadcast_current_data
 from app.database import cleanup_old_flow_completions
-from app.models import CalendarEvent, Task, TodayData, WEEKDAYS_JA
+from app.models import CalendarEvent, Task, TodayData, WeatherData, WEEKDAYS_JA
 from app.services import google_calendar, icloud_reminders
+from app.services import weather as weather_service
 
 logger = logging.getLogger(__name__)
 
 _cached_data: TodayData | None = None
+_cached_weather: WeatherData | None = None
 _last_refresh: datetime | None = None
 _scheduler = AsyncIOScheduler()
+
+
+async def refresh_weather():
+    """Open-Meteo から久留米市の天気を取得してキャッシュを更新する"""
+    global _cached_weather, _cached_data
+    try:
+        result = await asyncio.to_thread(weather_service.fetch_weather)
+        if result:
+            _cached_weather = WeatherData(**result)
+            if _cached_data:
+                _cached_data = _cached_data.model_copy(update={"weather": _cached_weather})
+                await broadcast_current_data()
+    except Exception:
+        logger.error("天気情報の更新に失敗しました", exc_info=True)
 
 
 async def refresh_data():
@@ -48,6 +64,7 @@ async def refresh_data():
         stock_tasks=stock_tasks,
         flow_tasks=flow_tasks,
         last_refresh=now_jst.strftime("%H:%M"),
+        weather=_cached_weather,
     )
     _last_refresh = now_jst
     logger.info("データ更新完了: %s %s", today_str, weekday_ja)
@@ -64,7 +81,16 @@ def get_last_refresh() -> datetime | None:
 
 
 def start_scheduler():
-    _scheduler.add_job(refresh_data, "interval", minutes=5, id="refresh_data", max_instances=1, coalesce=True)
+    _scheduler.add_job(
+        refresh_data, "interval", minutes=5,
+        id="refresh_data", max_instances=1, coalesce=True,
+    )
+    # 毎朝 6:15 JST に天気予報を更新
+    _scheduler.add_job(
+        refresh_weather, "cron",
+        hour=6, minute=15, timezone="Asia/Tokyo",
+        id="refresh_weather", max_instances=1, coalesce=True,
+    )
     _scheduler.start()
 
 

@@ -249,9 +249,47 @@ document.getElementById('proposals-overlay').addEventListener('click', (e) => {
   if (e.target === document.getElementById('proposals-overlay')) closeProposalsModal();
 });
 
+// ===== 天気描画 =====
+function renderWeather(weather) {
+  const emojiEl     = document.getElementById('weather-emoji');
+  const conditionEl = document.getElementById('weather-condition');
+  const tempEl      = document.getElementById('weather-temp');
+  const hourlyEl    = document.getElementById('weather-hourly');
+
+  if (!weather) {
+    emojiEl.textContent     = '—';
+    conditionEl.textContent = '取得中…';
+    tempEl.textContent      = '';
+    hourlyEl.innerHTML      = '';
+    return;
+  }
+
+  emojiEl.textContent     = weather.condition_emoji;
+  conditionEl.textContent = weather.condition;
+  tempEl.textContent      = `↑${weather.temp_max}° ↓${weather.temp_min}°`;
+
+  hourlyEl.innerHTML = '';
+  for (const h of weather.hourly_precip) {
+    const p = h.precip_prob;
+    const level = p >= 60 ? 'high' : p >= 30 ? 'mid' : p >= 10 ? 'low' : 'none';
+
+    const block = document.createElement('div');
+    block.className = 'precip-block';
+    block.innerHTML = `
+      <div class="precip-bar-wrap">
+        <div class="precip-bar ${level}" style="height:${p}%"></div>
+      </div>
+      <div class="precip-time">${h.hour}時</div>
+      <div class="precip-pct ${level}">${p}%</div>
+    `;
+    hourlyEl.appendChild(block);
+  }
+}
+
 // ===== 統合描画 =====
 function renderAll(data) {
   updateDateDisplay(data);
+  renderWeather(data.weather || null);
   renderEvents(data.events);
   renderTasks(data.stock_tasks, 'stock-list');
   renderTasks(data.flow_tasks, 'flow-list');

@@ -38,6 +38,19 @@ class EventProposal(BaseModel):
     status: str = "pending"  # pending / approved / rejected
 
 
+class WeatherHour(BaseModel):
+    hour: int         # 6, 9, 12, 15, 18, 21
+    precip_prob: int  # 0–100 (%)
+
+
+class WeatherData(BaseModel):
+    condition: str
+    condition_emoji: str
+    temp_max: int
+    temp_min: int
+    hourly_precip: list[WeatherHour]
+
+
 class TodayData(BaseModel):
     date: str       # YYYY-MM-DD
     weekday: str    # 日本語曜日 (月曜日, 火曜日, ...)
@@ -46,3 +59,4 @@ class TodayData(BaseModel):
     flow_tasks: list[Task]
     last_refresh: str | None = None  # HH:MM (Asia/Tokyo)
     proposals: list[EventProposal] = []  # 承認待ちの学校行事提案
+    weather: WeatherData | None = None

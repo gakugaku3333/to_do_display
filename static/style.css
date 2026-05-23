@@ -30,6 +30,11 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+}
+
 /* ===== STATUS BANNER ===== */
 #status-banner {
   position: fixed;
@@ -91,10 +96,108 @@ html, body {
   margin-top: 2px;
 }
 
+/* ===== WEATHER BAR ===== */
+#weather-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 24px;
+  height: 64px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#weather-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding-right: 20px;
+  border-right: 1px solid var(--border);
+  margin-right: 20px;
+  min-width: 180px;
+}
+
+#weather-emoji {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+#weather-condition {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+#weather-temp {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+#weather-hourly {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  align-items: flex-end;
+  height: 48px;
+  padding-bottom: 4px;
+}
+
+.precip-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  max-width: 56px;
+}
+
+.precip-bar-wrap {
+  width: 100%;
+  height: 22px;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(255,255,255,0.04);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.precip-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.4s ease;
+}
+
+.precip-bar.none  { background: var(--border); }
+.precip-bar.low   { background: #58a6ff; opacity: 0.5; }
+.precip-bar.mid   { background: #58a6ff; }
+.precip-bar.high  { background: #388bfd; }
+
+.precip-time {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  letter-spacing: 0;
+}
+
+.precip-pct {
+  font-size: 0.7rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.precip-pct.none { color: var(--text-secondary); opacity: 0.5; }
+.precip-pct.low  { color: #58a6ff; }
+.precip-pct.mid  { color: #58a6ff; }
+.precip-pct.high { color: #79c0ff; }
+
 /* ===== MAIN LAYOUT ===== */
 #main {
   display: flex;
-  height: calc(100vh - 72px);
+  flex: 1;
+  min-height: 0;
   gap: 1px;
   background: var(--border);
   overflow: hidden;
