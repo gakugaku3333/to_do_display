@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 
 import aiosqlite
@@ -51,6 +52,15 @@ async def init_db():
                 description TEXT,
                 image_filename TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS weekly_tasks (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                weekdays TEXT NOT NULL DEFAULT '',
+                sort_order INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             )
         """)
@@ -162,13 +172,92 @@ async def get_proposal_by_id(proposal_id: str) -> dict | None:
 
 
 async def cleanup_old_flow_completions(today_str: str):
-    """フロー型タスクの消込を、期日が変わったらリセットする"""
+    """フロー型・曜日型タスクの完了状態を、日付が変わったらリセットする"""
     try:
         db = await get_connection()
         await db.execute(
-            "DELETE FROM task_completions WHERE task_type = 'flow' AND due_date != ?",
+            "DELETE FROM task_completions WHERE task_type IN ('flow', 'weekly') AND due_date != ?",
             (today_str,),
         )
         await db.commit()
     except Exception:
-        logger.error("フロータスクのクリーンアップに失敗しました", exc_info=True)
+        logger.error("フロー/曜日タスクのクリーンアップに失敗しました", exc_info=True)
+
+
+# ===== 曜日タスク CRUD =====
+
+def _parse_weekdays(weekdays_str: str) -> list[int]:
+    if not weekdays_str:
+        return []
+    try:
+        return [int(x) for x in weekdays_str.split(",") if x.strip()]
+    except ValueError:
+        return []
+
+
+async def get_all_weekly_tasks() -> list[dict]:
+    try:
+        db = await get_connection()
+        async with db.execute(
+            "SELECT id, title, weekdays, sort_order FROM weekly_tasks ORDER BY sort_order, created_at"
+        ) as cursor:
+            rows = await cursor.fetchall()
+            cols = [d[0] for d in cursor.description]
+        return [
+            {**dict(zip(cols, row)), "weekdays": _parse_weekdays(dict(zip(cols, row))["weekdays"])}
+            for row in rows
+        ]
+    except Exception:
+        logger.error("曜日タスクの取得に失敗しました", exc_info=True)
+        return []
+
+
+async def get_weekly_tasks_for_weekday(weekday: int) -> list[dict]:
+    """今日の曜日（0=月〜6=日）に一致する曜日タスクを返す"""
+    all_tasks = await get_all_weekly_tasks()
+    return [t for t in all_tasks if weekday in t["weekdays"]]
+
+
+async def create_weekly_task(title: str, weekdays: list[int]) -> str:
+    task_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    weekdays_str = ",".join(str(w) for w in sorted(weekdays))
+    try:
+        db = await get_connection()
+        await db.execute(
+            "INSERT INTO weekly_tasks (id, title, weekdays, sort_order, created_at) VALUES (?, ?, ?, 0, ?)",
+            (task_id, title, weekdays_str, now),
+        )
+        await db.commit()
+    except Exception:
+        logger.error("曜日タスクの作成に失敗しました: %s", title, exc_info=True)
+        raise
+    return task_id
+
+
+async def update_weekly_task(task_id: str, title: str, weekdays: list[int]) -> bool:
+    weekdays_str = ",".join(str(w) for w in sorted(weekdays))
+    try:
+        db = await get_connection()
+        await db.execute(
+            "UPDATE weekly_tasks SET title = ?, weekdays = ? WHERE id = ?",
+            (title, weekdays_str, task_id),
+        )
+        affected = db.total_changes
+        await db.commit()
+        return affected > 0
+    except Exception:
+        logger.error("曜日タスクの更新に失敗しました: %s", task_id, exc_info=True)
+        raise
+
+
+async def delete_weekly_task(task_id: str) -> bool:
+    try:
+        db = await get_connection()
+        await db.execute("DELETE FROM weekly_tasks WHERE id = ?", (task_id,))
+        affected = db.total_changes
+        await db.commit()
+        return affected > 0
+    except Exception:
+        logger.error("曜日タスクの削除に失敗しました: %s", task_id, exc_info=True)
+        raise

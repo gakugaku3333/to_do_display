@@ -297,6 +297,188 @@ function renderAll(data) {
   syncProposals(data.proposals || []);
 }
 
+// ===== 曜日タスク設定モーダル =====
+const WEEKDAY_LABELS = ['月', '火', '水', '木', '金', '土', '日'];
+let _todayWeekday = new Date().getDay(); // 0=日〜6=土（JS）→ JStoJA で変換
+// JS: 0=日,1=月,...,6=土  /  Python: 0=月,...,6=日
+function jsDayToJa(jsDay) { return jsDay === 0 ? 6 : jsDay - 1; }
+
+function buildDaySelector(containerId, selectedDays = []) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  const todayJa = jsDayToJa(new Date().getDay());
+  WEEKDAY_LABELS.forEach((label, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'day-toggle' + (selectedDays.includes(i) ? ' selected' : '') + (i === todayJa ? ' today-mark' : '');
+    btn.textContent = label;
+    btn.dataset.day = i;
+    btn.addEventListener('click', () => btn.classList.toggle('selected'));
+    container.appendChild(btn);
+  });
+}
+
+function getSelectedDays(containerId) {
+  return [...document.querySelectorAll(`#${containerId} .day-toggle.selected`)]
+    .map(b => parseInt(b.dataset.day));
+}
+
+function renderDayChips(weekdays) {
+  const todayJa = jsDayToJa(new Date().getDay());
+  return WEEKDAY_LABELS.map((label, i) => {
+    if (!weekdays.includes(i)) return '';
+    const cls = i === todayJa ? 'day-chip today' : 'day-chip active';
+    return `<span class="${cls}">${label}</span>`;
+  }).join('');
+}
+
+async function loadWeeklyTasks() {
+  const res = await fetch('/api/weekly-tasks', { headers: authHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+function renderWeeklyTaskList(tasks) {
+  const list = document.getElementById('weekly-task-list');
+  list.innerHTML = '';
+
+  if (tasks.length === 0) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:0.9rem">まだ曜日タスクがありません</div>';
+    return;
+  }
+
+  tasks.forEach(task => {
+    const row = document.createElement('div');
+    row.className = 'weekly-task-row';
+    row.dataset.taskId = task.id;
+
+    // 表示モード
+    const display = document.createElement('div');
+    display.className = 'weekly-task-display';
+    display.innerHTML = `
+      <span class="weekly-task-title">${escapeHtml(task.title)}</span>
+      <div class="weekly-task-days">${renderDayChips(task.weekdays)}</div>
+      <div class="weekly-task-actions">
+        <button class="weekly-btn edit-btn">✏</button>
+        <button class="weekly-btn delete delete-btn">🗑</button>
+      </div>`;
+
+    // 編集フォーム（初期は非表示）
+    const editForm = document.createElement('div');
+    editForm.className = 'weekly-task-edit';
+    editForm.style.display = 'none';
+    const editSelectorId = `edit-days-${task.id}`;
+    editForm.innerHTML = `
+      <input type="text" class="edit-title-input" value="${escapeHtml(task.title)}" maxlength="50">
+      <div id="${editSelectorId}" class="day-selector"></div>
+      <div class="weekly-edit-actions">
+        <button class="weekly-cancel-btn">キャンセル</button>
+        <button class="weekly-save-btn">保存</button>
+      </div>`;
+
+    row.appendChild(display);
+    row.appendChild(editForm);
+    list.appendChild(row);
+
+    // 編集ボタン
+    display.querySelector('.edit-btn').addEventListener('click', () => {
+      display.style.display = 'none';
+      editForm.style.display = 'flex';
+      editForm.style.flexDirection = 'column';
+      buildDaySelector(editSelectorId, task.weekdays);
+      editForm.querySelector('.edit-title-input').focus();
+    });
+
+    // キャンセル
+    editForm.querySelector('.weekly-cancel-btn').addEventListener('click', () => {
+      editForm.style.display = 'none';
+      display.style.display = 'flex';
+    });
+
+    // 保存
+    editForm.querySelector('.weekly-save-btn').addEventListener('click', async () => {
+      const title = editForm.querySelector('.edit-title-input').value.trim();
+      const days = getSelectedDays(editSelectorId);
+      if (!title || days.length === 0) return;
+      const res = await fetch(`/api/weekly-tasks/${task.id}`, {
+        method: 'PUT',
+        headers: authHeaders(true),
+        body: JSON.stringify({ title, weekdays: days }),
+      });
+      if (res.ok) {
+        const updated = await loadWeeklyTasks();
+        renderWeeklyTaskList(updated);
+      }
+    });
+
+    // 削除
+    display.querySelector('.delete-btn').addEventListener('click', async () => {
+      if (!confirm(`「${task.title}」を削除しますか？`)) return;
+      const res = await fetch(`/api/weekly-tasks/${task.id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        const updated = await loadWeeklyTasks();
+        renderWeeklyTaskList(updated);
+      }
+    });
+  });
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function openWeeklyModal() {
+  document.getElementById('weekly-overlay').classList.remove('hidden');
+  buildDaySelector('weekly-add-days');
+  document.getElementById('weekly-add-title').value = '';
+  document.getElementById('weekly-add-btn').disabled = true;
+  const tasks = await loadWeeklyTasks();
+  renderWeeklyTaskList(tasks);
+}
+
+function closeWeeklyModal() {
+  document.getElementById('weekly-overlay').classList.add('hidden');
+}
+
+document.getElementById('weekly-settings-btn').addEventListener('click', openWeeklyModal);
+document.getElementById('weekly-close-btn').addEventListener('click', closeWeeklyModal);
+document.getElementById('weekly-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('weekly-overlay')) closeWeeklyModal();
+});
+
+// 追加フォーム
+const addTitleInput = document.getElementById('weekly-add-title');
+const addBtn = document.getElementById('weekly-add-btn');
+
+addTitleInput.addEventListener('input', () => {
+  addBtn.disabled = !addTitleInput.value.trim();
+});
+
+addBtn.addEventListener('click', async () => {
+  const title = addTitleInput.value.trim();
+  const days = getSelectedDays('weekly-add-days');
+  if (!title || days.length === 0) {
+    showStatusBanner('タスク名と曜日を入力してください', 'warning');
+    setTimeout(hideStatusBanner, 2000);
+    return;
+  }
+  const res = await fetch('/api/weekly-tasks', {
+    method: 'POST',
+    headers: authHeaders(true),
+    body: JSON.stringify({ title, weekdays: days }),
+  });
+  if (res.ok) {
+    addTitleInput.value = '';
+    addBtn.disabled = true;
+    buildDaySelector('weekly-add-days');
+    const updated = await loadWeeklyTasks();
+    renderWeeklyTaskList(updated);
+  }
+});
+
 // ===== タップ処理（重複排除付き） =====
 const pendingRequests = new Map();
 

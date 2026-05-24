@@ -45,7 +45,10 @@
       </section>
 
       <section id="flow-section" class="panel">
-        <h2 class="panel-title" id="flow-title">🔄 本日の曜日タスク</h2>
+        <div class="panel-header">
+          <h2 class="panel-title" id="flow-title">🔄 本日の曜日タスク</h2>
+          <button id="weekly-settings-btn" class="panel-settings-btn" title="曜日タスクを設定">⚙</button>
+        </div>
         <div id="flow-list" class="item-list"></div>
       </section>
     </div>
@@ -64,6 +67,22 @@
       <div id="proposals-actions">
         <button id="btn-reject" class="proposal-btn reject-btn">✕ 却下</button>
         <button id="btn-approve" class="proposal-btn approve-btn">✓ カレンダーに追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 曜日タスク設定モーダル -->
+  <div id="weekly-overlay" class="hidden">
+    <div id="weekly-modal">
+      <div id="weekly-modal-header">
+        <span>🗓 曜日タスク設定</span>
+        <button id="weekly-close-btn">✕</button>
+      </div>
+      <div id="weekly-task-list"></div>
+      <div id="weekly-add-form">
+        <input id="weekly-add-title" type="text" placeholder="タスク名を入力…" maxlength="50">
+        <div id="weekly-add-days" class="day-selector"></div>
+        <button id="weekly-add-btn" disabled>追加</button>
       </div>
     </div>
   </div>
