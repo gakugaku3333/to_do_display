@@ -12,7 +12,7 @@
 // 重要: 以前は全アセットが cache-first だったため、app.js を更新しても
 // 古いコードが配信され続ける問題があった。コード系を network-first にして解消。
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `dashboard-${CACHE_VERSION}`;
 
 // オフライン起動に最低限必要なアセット
@@ -25,7 +25,15 @@ const PRECACHE_URLS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then((cache) =>
+      // cache:'reload' でブラウザの HTTP キャッシュを迂回し、常にネットワークから取得する。
+      // これにより Safari の旧キャッシュが SW の precache を汚染するのを防ぐ。
+      Promise.all(
+        PRECACHE_URLS.map((url) =>
+          cache.add(new Request(url, { cache: 'reload' }))
+        )
+      )
+    )
   );
   // 新しい SW を待機させずに即座に有効化する
   self.skipWaiting();

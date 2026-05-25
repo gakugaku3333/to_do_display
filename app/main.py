@@ -41,15 +41,22 @@ app.include_router(health.router)
 app.include_router(school_docs.router)
 app.include_router(reminders.router)
 
-# Service Worker は常に再検証させ、更新を確実に検知させる。
-# （StaticFiles のデフォルトでは no-cache が付かないため専用ルートで配信）
+# コード系ファイルは常に再検証させる（StaticFiles は no-cache ヘッダーを付けないため専用ルートで配信）。
+# Safari の HTTP キャッシュに古いバージョンが残っていると SW の precache も汚染されるため、
+# sw.js / app.js / style.css すべてに no-cache を付与する。
+_NO_CACHE = {"Cache-Control": "no-cache"}
+
 @app.get("/static/sw.js")
 async def service_worker():
-    return FileResponse(
-        "static/sw.js",
-        media_type="application/javascript",
-        headers={"Cache-Control": "no-cache"},
-    )
+    return FileResponse("static/sw.js", media_type="application/javascript", headers=_NO_CACHE)
+
+@app.get("/static/app.js")
+async def app_js():
+    return FileResponse("static/app.js", media_type="application/javascript", headers=_NO_CACHE)
+
+@app.get("/static/style.css")
+async def style_css():
+    return FileResponse("static/style.css", media_type="text/css", headers=_NO_CACHE)
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

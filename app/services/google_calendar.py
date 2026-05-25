@@ -24,7 +24,10 @@ CREDENTIALS_FILE = "credentials.json"
 OWNER_COLORS = {
     "husband": "#4A90D9",
     "wife": "#E86A9A",
+    "family": "#2ecc71",
 }
+
+FAMILY_CALENDAR_ID = "family15100549285521733578@group.calendar.google.com"
 
 
 def get_credentials(account_name: str) -> Credentials | None:
@@ -143,21 +146,29 @@ def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
             service = build("calendar", "v3", credentials=creds, cache_discovery=False)
             calendars = service.calendarList().list().execute().get("items", [])
 
-            for cal in calendars:
-                cal_id = cal["id"]
-                result = service.events().list(
-                    calendarId=cal_id,
-                    timeMin=time_min,
-                    timeMax=time_max,
-                    singleEvents=True,
-                    orderBy="startTime",
-                ).execute()
+            # calendarList に含まれていないファミリーカレンダーを明示的に追加
+            cal_ids_with_owner: list[tuple[str, str]] = [(cal["id"], account_name) for cal in calendars]
+            if account_name == "husband":
+                cal_ids_with_owner.append((FAMILY_CALENDAR_ID, "family"))
+
+            for cal_id, owner in cal_ids_with_owner:
+                try:
+                    result = service.events().list(
+                        calendarId=cal_id,
+                        timeMin=time_min,
+                        timeMax=time_max,
+                        singleEvents=True,
+                        orderBy="startTime",
+                    ).execute()
+                except Exception:
+                    logger.warning("カレンダー %s の取得をスキップ", cal_id, exc_info=True)
+                    continue
 
                 for event in result.get("items", []):
                     event_id = event["id"]
                     if event_id not in seen_ids:
                         seen_ids.add(event_id)
-                        all_events.append(_parse_event(event, account_name, tz))
+                        all_events.append(_parse_event(event, owner, tz))
         except Exception:
             logger.error("%s のカレンダー取得に失敗しました", account_name, exc_info=True)
 
