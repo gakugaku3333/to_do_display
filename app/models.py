@@ -39,15 +39,15 @@ class EventProposal(BaseModel):
 
 
 class WeatherHour(BaseModel):
-    hour: int         # 6, 9, 12, 15, 18, 21
+    label: str        # 例: "〜6時", "〜12時", "〜翌0時"
     precip_prob: int  # 0–100 (%)
 
 
 class WeatherData(BaseModel):
     condition: str
     condition_emoji: str
-    temp_max: int
-    temp_min: int
+    temp_max: int | None = None
+    temp_min: int | None = None
     hourly_precip: list[WeatherHour]
 
 
@@ -60,3 +60,5 @@ class TodayData(BaseModel):
     last_refresh: str | None = None  # HH:MM (Asia/Tokyo)
     proposals: list[EventProposal] = []  # 承認待ちの学校行事提案
     weather: WeatherData | None = None
+    is_holiday: bool = False        # 祝日・振替休日の場合 True
+    holiday_name: str | None = None  # 祝日名（例: "元日", "春分の日"）

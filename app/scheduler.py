@@ -5,6 +5,7 @@ import logging
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
+import jpholiday
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.data_assembler import broadcast_current_data
@@ -40,6 +41,8 @@ async def refresh_data():
     today = date.today()
     today_str = today.isoformat()
     weekday_ja = WEEKDAYS_JA[today.weekday()]
+    holiday_name: str | None = jpholiday.is_holiday_name(today) or None
+    is_holiday = holiday_name is not None
 
     await cleanup_old_flow_completions(today_str)
 
@@ -65,6 +68,8 @@ async def refresh_data():
         flow_tasks=flow_tasks,
         last_refresh=now_jst.strftime("%H:%M"),
         weather=_cached_weather,
+        is_holiday=is_holiday,
+        holiday_name=holiday_name,
     )
     _last_refresh = now_jst
     logger.info("データ更新完了: %s %s", today_str, weekday_ja)

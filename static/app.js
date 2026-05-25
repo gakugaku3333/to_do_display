@@ -40,9 +40,22 @@ function updateDateDisplay(data) {
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const day = d.getDate();
+  const jsDay = d.getDay(); // 0=日, 6=土
   const refreshText = data.last_refresh ? `更新 ${data.last_refresh}` : '';
-  // innerHTML で date-info を更新する際、last-refresh も一緒に再生成する
-  dateEl.innerHTML = `<div>${year}年${month}月${day}日<br>${data.weekday}</div><div id="last-refresh">${refreshText}</div>`;
+
+  // 色分け: 祝日・日曜→赤、土曜→青
+  let dayClass = '';
+  if (data.is_holiday || jsDay === 0) dayClass = 'holiday';
+  else if (jsDay === 6) dayClass = 'saturday';
+
+  const holidayBadge = data.holiday_name
+    ? `<span class="holiday-badge">${data.holiday_name}</span>`
+    : '';
+
+  dateEl.innerHTML = `
+    <div class="date-main ${dayClass}">${year}年${month}月${day}日（${data.weekday.replace('曜日', '')}）${holidayBadge}</div>
+    <div id="last-refresh">${refreshText}</div>
+  `;
 }
 
 // ===== イベント描画 =====
@@ -279,7 +292,7 @@ function renderWeather(weather) {
       <div class="precip-bar-wrap">
         <div class="precip-bar ${level}" style="height:${p}%"></div>
       </div>
-      <div class="precip-time">${h.hour}時</div>
+      <div class="precip-time">${h.label}</div>
       <div class="precip-pct ${level}">${p}%</div>
     `;
     hourlyEl.appendChild(block);
@@ -492,9 +505,9 @@ async function handleTaskTap(el, task) {
   pendingRequests.set(task.id, controller);
 
   const isCompleted = el.classList.contains('completed');
-  const endpoint = isCompleted
-    ? `/api/tasks/${task.id}/uncomplete`
-    : `/api/tasks/${task.id}/complete`;
+  // task.id は "x-apple-reminder://UUID" のようにスラッシュを含むため URL には載せず、
+  // 必ずボディで送る（パスに含めると 404 になり完了が記録されない）。
+  const endpoint = isCompleted ? '/api/tasks/uncomplete' : '/api/tasks/complete';
 
   // 楽観的 UI 更新
   if (isCompleted) {
@@ -505,12 +518,12 @@ async function handleTaskTap(el, task) {
 
   try {
     const body = isCompleted
-      ? null
-      : JSON.stringify({ task_type: task.task_type, due_date: task.due_date || null });
+      ? JSON.stringify({ task_id: task.id })
+      : JSON.stringify({ task_id: task.id, task_type: task.task_type, due_date: task.due_date || null });
 
     await fetch(endpoint, {
       method: 'POST',
-      headers: body ? authHeaders(true) : authHeaders(),
+      headers: authHeaders(true),
       body: body,
       signal: controller.signal,
     });

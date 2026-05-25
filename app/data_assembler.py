@@ -46,6 +46,8 @@ async def get_current_data() -> TodayData | None:
         last_refresh=data.last_refresh,
         proposals=proposals,
         weather=data.weather,
+        is_holiday=data.is_holiday,
+        holiday_name=data.holiday_name,
     )
 
 

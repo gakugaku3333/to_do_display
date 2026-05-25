@@ -7,3 +7,4 @@ google-auth-oauthlib==1.2.1
 google-api-python-client==2.145.0
 google-generativeai==0.8.3
 python-multipart==0.0.12
+jpholiday==1.0.3
