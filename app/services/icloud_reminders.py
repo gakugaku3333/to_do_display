@@ -145,16 +145,23 @@ def fetch_tasks() -> tuple[list[Task], list[Task]]:
     return stock_tasks, flow_tasks
 
 
-def set_reminder_completed(task_id: str, completed: bool) -> bool:
-    """Reminders.app のタスク完了状態を更新する。成功時 True を返す。"""
+def set_reminder_completed(task_id: str, completed: bool, list_names: list[str] | None = None) -> bool:
+    """Reminders.app のタスク完了状態を更新する。成功時 True を返す。
+
+    list_names を渡すとそれらのリストだけを検索する。全リスト総当たりは iCloud 往復が
+    重なってタイムアウトしやすいため、呼び出し側で対象リストを指定すること。
+    """
     if sys.platform != "darwin":
         return False
     try:
+        args = ["osascript", str(_COMPLETE_SCRIPT_PATH), task_id, str(completed).lower()]
+        if list_names:
+            args.extend(list_names)
         result = subprocess.run(
-            ["osascript", str(_COMPLETE_SCRIPT_PATH), task_id, str(completed).lower()],
+            args,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
         )
         if result.returncode != 0:
             logger.error("complete_reminder.applescript エラー (id=%s): %s", task_id, result.stderr.strip())
