@@ -78,6 +78,39 @@ def test_duplicate_event_across_calendars_is_deduped():
     assert [e.id for e in events] == ["dup-event"]
 
 
+def test_event_color_id_overrides_owner_color():
+    """イベントに colorId があれば所有者色より優先される"""
+    service = MagicMock()
+    service.calendarList().list().execute.return_value = {"items": [{"id": "primary@example.com"}]}
+    service.events().list().execute.return_value = {
+        "items": [
+            {  # colorId 指定あり → パレット色
+                "id": "ev-colored",
+                "summary": "色付き",
+                "colorId": "11",  # Tomato
+                "start": {"dateTime": "2026-06-14T10:00:00+09:00"},
+                "end": {"dateTime": "2026-06-14T11:00:00+09:00"},
+            },
+            {  # colorId なし → 所有者(husband)色
+                "id": "ev-plain",
+                "summary": "色なし",
+                "start": {"dateTime": "2026-06-14T12:00:00+09:00"},
+                "end": {"dateTime": "2026-06-14T13:00:00+09:00"},
+            },
+        ],
+    }
+
+    with patch.object(google_calendar.settings, "excluded_calendar_ids", ""), \
+         patch.object(google_calendar.settings, "family_calendar_id", ""), \
+         patch.object(google_calendar, "build", return_value=service), \
+         patch.object(google_calendar, "get_credentials", lambda name: object() if name == "husband" else None):
+        events = google_calendar.fetch_today_events()
+
+    colors = {e.id: e.color for e in events}
+    assert colors["ev-colored"] == google_calendar.EVENT_COLOR_MAP["11"]
+    assert colors["ev-plain"] == google_calendar.OWNER_COLORS["husband"]
+
+
 def test_family_calendar_skipped_when_unset():
     """family_calendar_id が空ならファミリーカレンダーは追加されない"""
     service = _make_service([{"id": "primary@example.com"}])

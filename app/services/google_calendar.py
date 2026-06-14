@@ -30,6 +30,31 @@ OWNER_COLORS = {
 }
 DEFAULT_OWNER_COLOR = "#888888"
 
+# Google Calendar の「イベントの色」パレット（colorId → 16進カラー）。
+# イベント個別に色が設定されている場合は所有者色より優先する。
+EVENT_COLOR_MAP = {
+    "1": "#7986cb",   # Lavender
+    "2": "#33b679",   # Sage
+    "3": "#8e24aa",   # Grape
+    "4": "#e67c73",   # Flamingo
+    "5": "#f6bf26",   # Banana
+    "6": "#f4511e",   # Tangerine
+    "7": "#039be5",   # Peacock
+    "8": "#616161",   # Graphite
+    "9": "#3f51b5",   # Blueberry
+    "10": "#0b8043",  # Basil
+    "11": "#d50000",  # Tomato
+}
+
+
+def _event_color(event: dict, owner: str) -> str:
+    """イベントに colorId 指定があればその色を、無ければ所有者色を返す。"""
+    color_id = event.get("colorId")
+    if color_id and color_id in EVENT_COLOR_MAP:
+        return EVENT_COLOR_MAP[color_id]
+    return OWNER_COLORS.get(owner, DEFAULT_OWNER_COLOR)
+
+
 def get_credentials(account_name: str) -> Credentials | None:
     token_path = os.path.join(TOKENS_DIR, f"{account_name}.json")
     creds = None
@@ -69,6 +94,7 @@ def _parse_event(event: dict, owner: str, tz: ZoneInfo) -> CalendarEvent:
     title = event.get("summary", "(タイトルなし)")
     start = event.get("start", {})
     end = event.get("end", {})
+    color = _event_color(event, owner)
 
     if "dateTime" in start:
         start_dt = datetime.fromisoformat(start["dateTime"]).astimezone(tz)
@@ -80,7 +106,7 @@ def _parse_event(event: dict, owner: str, tz: ZoneInfo) -> CalendarEvent:
             end_time=end_dt.strftime("%H:%M"),
             is_all_day=False,
             owner=owner,
-            color=OWNER_COLORS.get(owner, DEFAULT_OWNER_COLOR),
+            color=color,
         )
     else:
         return CalendarEvent(
@@ -90,7 +116,7 @@ def _parse_event(event: dict, owner: str, tz: ZoneInfo) -> CalendarEvent:
             end_time=None,
             is_all_day=True,
             owner=owner,
-            color=OWNER_COLORS.get(owner, DEFAULT_OWNER_COLOR),
+            color=color,
         )
 
 
