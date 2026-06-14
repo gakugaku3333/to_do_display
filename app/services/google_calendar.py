@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, date, timezone
 from zoneinfo import ZoneInfo
 
@@ -126,55 +127,75 @@ def create_calendar_event(
     return result["id"]
 
 
+def _fetch_calendar_events(
+    creds: Credentials, cal_id: str, owner: str,
+    time_min: str, time_max: str, tz: ZoneInfo,
+) -> list[CalendarEvent]:
+    """単一カレンダーの当日イベントを取得する。ワーカースレッドから呼ばれる。
+
+    httplib2 / service オブジェクトはスレッド安全ではないため、スレッドごとに
+    新しい service を生成する（v2.x の静的 discovery によりネットワークは叩かない）。
+    """
+    try:
+        service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+        result = service.events().list(
+            calendarId=cal_id,
+            timeMin=time_min,
+            timeMax=time_max,
+            singleEvents=True,
+            orderBy="startTime",
+        ).execute()
+    except Exception:
+        logger.warning("カレンダー %s の取得をスキップ", cal_id, exc_info=True)
+        return []
+
+    return [_parse_event(event, owner, tz) for event in result.get("items", [])]
+
+
 def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
     tz = ZoneInfo(tz_name)
     today = date.today()
     time_min = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=tz).isoformat()
     time_max = datetime(today.year, today.month, today.day, 23, 59, 59, tzinfo=tz).isoformat()
 
-    all_events: list[CalendarEvent] = []
-    seen_ids: set[str] = set()
-
     excluded_ids = settings.excluded_calendar_ids_set
     family_calendar_id = settings.family_calendar_id
 
+    # まず取得対象カレンダーを列挙（夫→ファミリー→妻 の順を維持し重複時の優先順を固定）
+    jobs: list[tuple[Credentials, str, str]] = []
     for account_name in ("husband", "wife"):
         creds = get_credentials(account_name)
         if not creds:
             continue
-
         try:
             service = build("calendar", "v3", credentials=creds, cache_discovery=False)
             calendars = service.calendarList().list().execute().get("items", [])
-
-            # calendarList に含まれていないファミリーカレンダーを明示的に追加
-            cal_ids_with_owner: list[tuple[str, str]] = [
-                (cal["id"], account_name) for cal in calendars
-                if cal["id"] not in excluded_ids
-            ]
-            if account_name == "husband" and family_calendar_id:
-                cal_ids_with_owner.append((family_calendar_id, "family"))
-
-            for cal_id, owner in cal_ids_with_owner:
-                try:
-                    result = service.events().list(
-                        calendarId=cal_id,
-                        timeMin=time_min,
-                        timeMax=time_max,
-                        singleEvents=True,
-                        orderBy="startTime",
-                    ).execute()
-                except Exception:
-                    logger.warning("カレンダー %s の取得をスキップ", cal_id, exc_info=True)
-                    continue
-
-                for event in result.get("items", []):
-                    event_id = event["id"]
-                    if event_id not in seen_ids:
-                        seen_ids.add(event_id)
-                        all_events.append(_parse_event(event, owner, tz))
         except Exception:
-            logger.error("%s のカレンダー取得に失敗しました", account_name, exc_info=True)
+            logger.error("%s のカレンダー一覧取得に失敗しました", account_name, exc_info=True)
+            continue
+
+        for cal in calendars:
+            if cal["id"] not in excluded_ids:
+                jobs.append((creds, cal["id"], account_name))
+        # calendarList に含まれていないファミリーカレンダーを明示的に追加
+        if account_name == "husband" and family_calendar_id:
+            jobs.append((creds, family_calendar_id, "family"))
+
+    # 各カレンダーのイベント取得を並列実行（per-calendar の往復がボトルネックのため）。
+    # futures を投入順に走査するので、重複排除の優先順は jobs の順どおり決定的。
+    seen_ids: set[str] = set()
+    all_events: list[CalendarEvent] = []
+    if jobs:
+        with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
+            futures = [
+                executor.submit(_fetch_calendar_events, creds, cal_id, owner, time_min, time_max, tz)
+                for creds, cal_id, owner in jobs
+            ]
+            for future in futures:
+                for event in future.result():
+                    if event.id not in seen_ids:
+                        seen_ids.add(event.id)
+                        all_events.append(event)
 
     all_events.sort(key=lambda e: (e.start_time is None, e.start_time or ""))
     return all_events

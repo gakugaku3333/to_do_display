@@ -55,6 +55,29 @@ def test_family_calendar_added_for_husband_when_configured():
     assert "fam@group.calendar.google.com" in requested_ids
 
 
+def test_duplicate_event_across_calendars_is_deduped():
+    """複数カレンダーに同一IDのイベントが出ても1件に重複排除される"""
+    service = MagicMock()
+    service.calendarList().list().execute.return_value = {"items": [{"id": "primary@example.com"}]}
+    # primary と family の両方で同じイベントIDを返す
+    service.events().list().execute.return_value = {
+        "items": [{
+            "id": "dup-event",
+            "summary": "共有予定",
+            "start": {"dateTime": "2026-06-14T10:00:00+09:00"},
+            "end": {"dateTime": "2026-06-14T11:00:00+09:00"},
+        }],
+    }
+
+    with patch.object(google_calendar.settings, "excluded_calendar_ids", ""), \
+         patch.object(google_calendar.settings, "family_calendar_id", "fam@group.calendar.google.com"), \
+         patch.object(google_calendar, "build", return_value=service), \
+         patch.object(google_calendar, "get_credentials", lambda name: object() if name == "husband" else None):
+        events = google_calendar.fetch_today_events()
+
+    assert [e.id for e in events] == ["dup-event"]
+
+
 def test_family_calendar_skipped_when_unset():
     """family_calendar_id が空ならファミリーカレンダーは追加されない"""
     service = _make_service([{"id": "primary@example.com"}])
