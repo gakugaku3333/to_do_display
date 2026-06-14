@@ -682,15 +682,45 @@ function connectSSE() {
 }
 
 // ===== Screen Wake Lock (タブレットのスリープ防止) =====
-async function requestWakeLock() {
+// 夜間(21:30–06:00)は Wake Lock を解放する。Mac側のADBスケジュールで画面を
+// スリープさせるため、ここで画面を起こし続けると喧嘩してしまう。日中のみ保持する。
+const NIGHT_START_MIN = 21 * 60 + 30; // 21:30
+const NIGHT_END_MIN   = 6 * 60;       // 06:00
+
+function isNightNow() {
+  const n = new Date();
+  const m = n.getHours() * 60 + n.getMinutes();
+  return m >= NIGHT_START_MIN || m < NIGHT_END_MIN; // 跨ぎ（21:30〜翌6:00）
+}
+
+let wakeLockSentinel = null;
+
+async function acquireWakeLock() {
+  if (wakeLockSentinel) return;
   try {
-    await navigator.wakeLock.request('screen');
+    wakeLockSentinel = await navigator.wakeLock.request('screen');
+    // OSが解放した場合（画面OFF等）に参照を戻し、日中なら再取得できるようにする
+    wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
   } catch (_) { /* 非対応ブラウザでは無視 */ }
 }
 
+async function releaseWakeLock() {
+  try { if (wakeLockSentinel) await wakeLockSentinel.release(); } catch (_) { /* noop */ }
+  wakeLockSentinel = null;
+}
+
+// 可視かつ日中のときだけ画面を起こし続ける。夜間・非表示時は解放。
+function manageWakeLock() {
+  if (document.visibilityState !== 'visible' || isNightNow()) {
+    releaseWakeLock();
+  } else {
+    acquireWakeLock();
+  }
+}
+
 document.addEventListener('visibilitychange', () => {
+  manageWakeLock();
   if (document.visibilityState === 'visible') {
-    requestWakeLock();
     // SSE接続が切れていたら再接続
     if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
       connectSSE();
@@ -698,7 +728,9 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-requestWakeLock();
+// 時刻が夜間境界をまたいだら自動で取得/解放を切り替える（毎分判定）
+setInterval(manageWakeLock, 60 * 1000);
+manageWakeLock();
 
 // ===== 定期リロード（保険・1日1回 深夜帯）=====
 // データはSSE(/api/stream)で常時更新されるため、中身の最新化目的のリロードは不要。
