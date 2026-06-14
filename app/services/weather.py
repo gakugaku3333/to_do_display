@@ -120,16 +120,20 @@ def fetch_weather() -> dict | None:
             (a for a in temp_ts["areas"] if a["area"]["name"] == _AREA_TEMP),
             None,
         )
+        # 気象庁は夕方以降になると当日の日中(9時)データを落とし、翌日分のみ残す。
+        # 夜間の取得/再起動でも null にならないよう、最高気温は「今日以降で最初の9時」、
+        # 最低気温は「今日より後で最初の0時」にフォールバックする
+        # （早朝6時の通常取得時は今日の9時が存在するため当日値が選ばれる）。
         temp_max = temp_min = None
         if area_t:
             for time_str, temp_str in zip(temp_ts["timeDefines"], area_t.get("temps", [])):
                 if not temp_str:
                     continue
                 dt = datetime.fromisoformat(time_str).astimezone(_JST)
-                if dt.date() == today and dt.hour == 9 and temp_max is None:
-                    temp_max = int(temp_str)   # 今日の最高気温
+                if dt.date() >= today and dt.hour == 9 and temp_max is None:
+                    temp_max = int(temp_str)   # 最高気温（今日優先、無ければ翌日）
                 elif dt.date() > today and dt.hour == 0 and temp_min is None:
-                    temp_min = int(temp_str)   # 今夜の最低気温
+                    temp_min = int(temp_str)   # 最低気温（今夜）
 
         logger.info(
             "天気取得完了（気象庁）: %s %s°/%s°",

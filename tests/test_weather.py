@@ -1,11 +1,75 @@
 from __future__ import annotations
 
+import json
+from contextlib import contextmanager
 from datetime import date, timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app import database, scheduler
+from app.services import weather as weather_service
+
+
+def _jma_payload(temp_defines: list[str], temps: list[str]):
+    """最小構成の気象庁レスポンス（天気コード/降水確率/気温）を組み立てる。"""
+    today = date.today().isoformat()
+    return [{
+        "timeSeries": [
+            {  # 天気コード
+                "timeDefines": [f"{today}T05:00:00+09:00"],
+                "areas": [{"area": {"name": "筑後地方"}, "weatherCodes": ["100"], "weathers": ["晴れ"]}],
+            },
+            {  # 降水確率
+                "timeDefines": [f"{today}T18:00:00+09:00"],
+                "areas": [{"area": {"name": "筑後地方"}, "pops": ["10"]}],
+            },
+            {  # 気温（久留米）
+                "timeDefines": temp_defines,
+                "areas": [{"area": {"name": "久留米"}, "temps": temps}],
+            },
+        ],
+    }]
+
+
+@contextmanager
+def _mock_jma(payload):
+    resp = MagicMock()
+    resp.read.return_value = json.dumps(payload).encode()
+    cm = MagicMock()
+    cm.__enter__.return_value = resp
+    with patch.object(weather_service, "urlopen", return_value=cm):
+        yield
+
+
+def test_temp_max_falls_back_to_next_day_in_evening():
+    """夕方以降で当日9時データが消えても、最高気温は翌日9時にフォールバックする"""
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    payload = _jma_payload(
+        [f"{tomorrow}T00:00:00+09:00", f"{tomorrow}T09:00:00+09:00"],
+        ["20", "29"],
+    )
+    with _mock_jma(payload):
+        result = weather_service.fetch_weather()
+
+    assert result is not None
+    assert result["temp_max"] == 29   # 翌日9時にフォールバック（null にならない）
+    assert result["temp_min"] == 20
+
+
+def test_temp_uses_today_when_available():
+    """当日9時データがあれば当日値を優先する"""
+    today = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    payload = _jma_payload(
+        [f"{today}T09:00:00+09:00", f"{tomorrow}T00:00:00+09:00", f"{tomorrow}T09:00:00+09:00"],
+        ["31", "23", "28"],
+    )
+    with _mock_jma(payload):
+        result = weather_service.fetch_weather()
+
+    assert result["temp_max"] == 31   # 今日の9時
+    assert result["temp_min"] == 23   # 今夜の0時
 
 
 def _fake_weather(temp_max: int, temp_min: int):
