@@ -263,6 +263,13 @@ document.getElementById('proposals-overlay').addEventListener('click', (e) => {
 });
 
 // ===== 天気描画 =====
+function formatTempDelta(d) {
+  if (d === null || d === undefined) return '';      // 前日データなし
+  if (d > 0) return `<span class="temp-delta up">(+${d}度)</span>`;
+  if (d < 0) return `<span class="temp-delta down">(${d}度)</span>`;  // d は既に「−」付き
+  return '<span class="temp-delta flat">(±0度)</span>';
+}
+
 function renderWeather(weather) {
   const emojiEl     = document.getElementById('weather-emoji');
   const conditionEl = document.getElementById('weather-condition');
@@ -272,14 +279,17 @@ function renderWeather(weather) {
   if (!weather) {
     emojiEl.textContent     = '—';
     conditionEl.textContent = '取得中…';
-    tempEl.textContent      = '';
+    tempEl.innerHTML        = '';
     hourlyEl.innerHTML      = '';
     return;
   }
 
   emojiEl.textContent     = weather.condition_emoji;
   conditionEl.textContent = weather.condition;
-  tempEl.textContent      = `↑${weather.temp_max}° ↓${weather.temp_min}°`;
+  // 前日比 (+N度 / -N度 / ±0度) を気温の後ろに添える
+  tempEl.innerHTML =
+    `↑${weather.temp_max}°${formatTempDelta(weather.temp_max_delta)} ` +
+    `↓${weather.temp_min}°${formatTempDelta(weather.temp_min_delta)}`;
 
   hourlyEl.innerHTML = '';
   for (const h of weather.hourly_precip) {

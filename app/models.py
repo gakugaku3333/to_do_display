@@ -48,6 +48,8 @@ class WeatherData(BaseModel):
     condition_emoji: str
     temp_max: int | None = None
     temp_min: int | None = None
+    temp_max_delta: int | None = None  # 前日比（最高気温）。基準日が無ければ None
+    temp_min_delta: int | None = None  # 前日比（最低気温）
     hourly_precip: list[WeatherHour]
 
 

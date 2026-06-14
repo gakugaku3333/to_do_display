@@ -64,6 +64,17 @@ async def init_db():
                 created_at TEXT NOT NULL
             )
         """)
+        # 天気を日付ごとにキャッシュ。前日比の算出（前日の気温参照）と
+        # 再起動後の復元（当日分があれば API を叩かない）に使う。
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS weather_cache (
+                date TEXT PRIMARY KEY,          -- YYYY-MM-DD (JST)
+                temp_max INTEGER,
+                temp_min INTEGER,
+                payload TEXT NOT NULL,           -- WeatherData の JSON
+                fetched_at TEXT NOT NULL
+            )
+        """)
         await db.commit()
         logger.info("データベース初期化完了")
     except Exception:
@@ -182,6 +193,63 @@ async def cleanup_old_flow_completions(today_str: str):
         await db.commit()
     except Exception:
         logger.error("フロー/曜日タスクのクリーンアップに失敗しました", exc_info=True)
+
+
+# ===== 天気キャッシュ =====
+
+async def save_weather_cache(date_str: str, temp_max: int | None, temp_min: int | None, payload: str):
+    """指定日の天気を保存（同日は上書き）。古い行はまとめて掃除する。"""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        db = await get_connection()
+        await db.execute(
+            "INSERT OR REPLACE INTO weather_cache (date, temp_max, temp_min, payload, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (date_str, temp_max, temp_min, payload, now),
+        )
+        # 履歴は前日比に1日分あれば足りるので、直近以外の古い行を削除（30日保持）
+        await db.execute(
+            "DELETE FROM weather_cache WHERE date < date(?, '-30 day')",
+            (date_str,),
+        )
+        await db.commit()
+    except Exception:
+        logger.error("天気キャッシュの保存に失敗しました: %s", date_str, exc_info=True)
+
+
+async def get_weather_cache(date_str: str) -> dict | None:
+    """指定日の天気キャッシュを返す（無ければ None）。"""
+    try:
+        db = await get_connection()
+        async with db.execute(
+            "SELECT date, temp_max, temp_min, payload, fetched_at FROM weather_cache WHERE date = ?",
+            (date_str,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            cols = [d[0] for d in cursor.description]
+        return dict(zip(cols, row))
+    except Exception:
+        logger.error("天気キャッシュの取得に失敗しました: %s", date_str, exc_info=True)
+        return None
+
+
+async def get_prev_weather_temps(before_date: str) -> tuple[int | None, int | None] | None:
+    """before_date より前で最も新しい日の (temp_max, temp_min) を返す（前日比の基準）。"""
+    try:
+        db = await get_connection()
+        async with db.execute(
+            "SELECT temp_max, temp_min FROM weather_cache WHERE date < ? ORDER BY date DESC LIMIT 1",
+            (before_date,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return (row[0], row[1])
+    except Exception:
+        logger.error("前日気温の取得に失敗しました", exc_info=True)
+        return None
 
 
 # ===== 曜日タスク CRUD =====
