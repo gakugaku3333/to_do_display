@@ -23,6 +23,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+git のコミット前テスト実行フックを有効化（クローンごとに一度だけ）:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`.githooks/pre-commit` がコミット前に `pytest` を実行し、テストが赤いコミットを防ぎます。
+
 ### 2. 環境変数の設定
 
 ```bash
