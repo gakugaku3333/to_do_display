@@ -604,5 +604,21 @@ document.addEventListener('visibilitychange', () => {
 
 requestWakeLock();
 
+// ===== 定期リロード（保険・1日1回 深夜帯）=====
+// データはSSE(/api/stream)で常時更新されるため、中身の最新化目的のリロードは不要。
+// JSのメモリリーク・描画フリーズ・デプロイ後のSW更新ズレからの自動復帰が目的。
+// 誰も見ていない早朝(4:00台)に1日1回だけ全リロードする。
+// リロード後にタイマーが再起動して同一時間帯で多重発火するのを防ぐため、
+// localStorageに実施日を記録して「その日もう実施済みか」をガードする。
+const RELOAD_HOUR = 4; // リロードを実施する時刻（時）
+setInterval(() => {
+  const now = new Date();
+  if (now.getHours() !== RELOAD_HOUR) return;
+  const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  if (localStorage.getItem('lastDailyReload') === today) return;
+  localStorage.setItem('lastDailyReload', today);
+  window.location.reload();
+}, 60 * 1000); // 1分ごとに時刻チェック
+
 // ===== 初期化 =====
 connectSSE();
