@@ -51,6 +51,20 @@ class WeatherData(BaseModel):
     hourly_precip: list[WeatherHour]
 
 
+class WeekDay(BaseModel):
+    date: str                       # YYYY-MM-DD
+    weekday: str                    # 日本語曜日 (月曜日, ...)
+    is_today: bool = False
+    is_holiday: bool = False
+    holiday_name: str | None = None
+    events: list[CalendarEvent] = []
+
+
+class WeekData(BaseModel):
+    days: list[WeekDay]
+    last_refresh: str | None = None  # HH:MM (Asia/Tokyo) 取得時刻
+
+
 class TodayData(BaseModel):
     date: str       # YYYY-MM-DD
     weekday: str    # 日本語曜日 (月曜日, 火曜日, ...)

@@ -34,7 +34,10 @@
 
   <main id="main">
     <section id="events-section" class="panel">
-      <h2 class="panel-title">📅 今日の予定</h2>
+      <div class="panel-header">
+        <h2 class="panel-title">📅 今日の予定</h2>
+        <button id="week-view-btn" class="panel-settings-btn" title="今週の予定を表示">📆</button>
+      </div>
       <div id="events-list" class="item-list"></div>
     </section>
 
@@ -83,6 +86,20 @@
         <input id="weekly-add-title" type="text" placeholder="タスク名を入力…" maxlength="50">
         <div id="weekly-add-days" class="day-selector"></div>
         <button id="weekly-add-btn" disabled>追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 週間予定モーダル -->
+  <div id="week-overlay" class="hidden">
+    <div id="week-modal">
+      <div id="week-modal-header">
+        <span id="week-modal-title">📆 今週の予定</span>
+        <button id="week-close-btn">✕</button>
+      </div>
+      <div id="week-body">
+        <div id="week-loading">読み込み中…</div>
+        <div id="week-days"></div>
       </div>
     </div>
   </div>

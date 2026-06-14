@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from datetime import date
+import asyncio
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
+import jpholiday
+
+from app.config import settings
 from app.database import get_completed_ids, get_pending_proposals, get_weekly_tasks_for_weekday
-from app.models import EventProposal, Task, TodayData, WEEKDAYS_JA
+from app.models import EventProposal, Task, TodayData, WeekData, WeekDay, WEEKDAYS_JA
+from app.services import google_calendar
 
 
 async def get_current_data() -> TodayData | None:
@@ -61,6 +67,33 @@ def get_empty_data() -> TodayData:
         stock_tasks=[],
         flow_tasks=[],
     )
+
+
+async def get_week_data(days: int = 7) -> WeekData:
+    """今日から days 日間の予定を曜日・祝日情報つきで組み立てて返す。
+
+    Google Calendar をオンデマンドで取得する（ボタン押下時のみ）。SSE で常時配信する
+    当日データとは別系統で、キャッシュ更新は呼び出し側（ルーター）の TTL に委ねる。
+    """
+    grouped = await asyncio.to_thread(google_calendar.fetch_week_events, settings.timezone, days)
+
+    tz = ZoneInfo(settings.timezone)
+    today = date.today()
+    week_days: list[WeekDay] = []
+    for i in range(days):
+        d = today + timedelta(days=i)
+        ds = d.isoformat()
+        holiday_name: str | None = jpholiday.is_holiday_name(d) or None
+        week_days.append(WeekDay(
+            date=ds,
+            weekday=WEEKDAYS_JA[d.weekday()],
+            is_today=(i == 0),
+            is_holiday=holiday_name is not None,
+            holiday_name=holiday_name,
+            events=grouped.get(ds, []),
+        ))
+
+    return WeekData(days=week_days, last_refresh=datetime.now(tz).strftime("%H:%M"))
 
 
 async def broadcast_current_data():
