@@ -4,8 +4,9 @@
     {
       "name": "dashboard",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", ".venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080"],
-      "port": 8080
+      "runtimeArgs": ["-c", ".venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT"],
+      "port": 8080,
+      "autoPort": true
     }
   ]
 }
