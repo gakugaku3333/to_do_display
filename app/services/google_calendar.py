@@ -154,29 +154,11 @@ def create_calendar_event(
     return result["id"]
 
 
-def _fetch_calendar_events(
-    creds: Credentials, cal_id: str, owner: str,
-    time_min: str, time_max: str, tz: ZoneInfo,
-) -> list[CalendarEvent]:
-    """単一カレンダーの当日イベントを取得する。ワーカースレッドから呼ばれる。
-
-    httplib2 / service オブジェクトはスレッド安全ではないため、スレッドごとに
-    新しい service を生成する（v2.x の静的 discovery によりネットワークは叩かない）。
-    """
-    try:
-        service = build("calendar", "v3", credentials=creds, cache_discovery=False)
-        result = service.events().list(
-            calendarId=cal_id,
-            timeMin=time_min,
-            timeMax=time_max,
-            singleEvents=True,
-            orderBy="startTime",
-        ).execute()
-    except Exception:
-        logger.warning("カレンダー %s の取得をスキップ", cal_id, exc_info=True)
-        return []
-
-    return [_parse_event(event, owner, tz) for event in result.get("items", [])]
+def _day_bounds(tz: ZoneInfo, start: date, end: date) -> tuple[str, str]:
+    """[start 00:00:00, end 23:59:59] を RFC3339 文字列のペアで返す（timeMin/timeMax 用）。"""
+    time_min = datetime(start.year, start.month, start.day, 0, 0, 0, tzinfo=tz).isoformat()
+    time_max = datetime(end.year, end.month, end.day, 23, 59, 59, tzinfo=tz).isoformat()
+    return time_min, time_max
 
 
 def _build_jobs() -> list[tuple[Credentials, str, str]]:
@@ -213,23 +195,23 @@ def _build_jobs() -> list[tuple[Credentials, str, str]]:
 def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
     tz = ZoneInfo(tz_name)
     today = date.today()
-    time_min = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=tz).isoformat()
-    time_max = datetime(today.year, today.month, today.day, 23, 59, 59, tzinfo=tz).isoformat()
+    time_min, time_max = _day_bounds(tz, today, today)
 
     jobs = _build_jobs()
 
     # 各カレンダーのイベント取得を並列実行（per-calendar の往復がボトルネックのため）。
-    # futures を投入順に走査するので、重複排除の優先順は jobs の順どおり決定的。
+    # jobs と futures を投入順に zip するので、重複排除の優先順は jobs の順どおり決定的。
     seen_ids: set[str] = set()
     all_events: list[CalendarEvent] = []
     if jobs:
         with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
             futures = [
-                executor.submit(_fetch_calendar_events, creds, cal_id, owner, time_min, time_max, tz)
-                for creds, cal_id, owner in jobs
+                executor.submit(_fetch_calendar_raw, creds, cal_id, time_min, time_max)
+                for creds, cal_id, _ in jobs
             ]
-            for future in futures:
-                for event in future.result():
+            for (_, _, owner), future in zip(jobs, futures):
+                for raw in future.result():
+                    event = _parse_event(raw, owner, tz)
                     if event.id not in seen_ids:
                         seen_ids.add(event.id)
                         all_events.append(event)
@@ -296,8 +278,7 @@ def fetch_week_events(tz_name: str = "Asia/Tokyo", days: int = 7) -> dict[str, l
     today = date.today()
     window_start = today
     window_end = today + timedelta(days=days - 1)
-    time_min = datetime(window_start.year, window_start.month, window_start.day, 0, 0, 0, tzinfo=tz).isoformat()
-    time_max = datetime(window_end.year, window_end.month, window_end.day, 23, 59, 59, tzinfo=tz).isoformat()
+    time_min, time_max = _day_bounds(tz, window_start, window_end)
 
     jobs = _build_jobs()
     grouped: dict[str, list[CalendarEvent]] = {

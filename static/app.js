@@ -33,6 +33,27 @@ function hideStatusBanner() {
   el.className = 'hidden';
 }
 
+// 一時的なバナー表示（ms 後に自動で消す）
+function flashStatus(message, type, ms = 3000) {
+  showStatusBanner(message, type);
+  setTimeout(hideStatusBanner, ms);
+}
+
+// オーバーレイ背景（カード外）クリックで閉じる共通ハンドラ
+function dismissOnBackdrop(overlayId, close) {
+  const overlay = document.getElementById(overlayId);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+}
+
+// 日付の色分け: 祝日・日曜→holiday(赤)、土曜→saturday(青)。当日表示と週間表示で共通。
+function dateColorClass(jsDay, isHoliday) {
+  if (isHoliday || jsDay === 0) return 'holiday';
+  if (jsDay === 6) return 'saturday';
+  return '';
+}
+
 // ===== 日付表示 =====
 function updateDateDisplay(data) {
   const dateEl = document.getElementById('date-info');
@@ -43,10 +64,7 @@ function updateDateDisplay(data) {
   const jsDay = d.getDay(); // 0=日, 6=土
   const refreshText = data.last_refresh ? `更新 ${data.last_refresh}` : '';
 
-  // 色分け: 祝日・日曜→赤、土曜→青
-  let dayClass = '';
-  if (data.is_holiday || jsDay === 0) dayClass = 'holiday';
-  else if (jsDay === 6) dayClass = 'saturday';
+  const dayClass = dateColorClass(jsDay, data.is_holiday);
 
   const holidayBadge = data.holiday_name
     ? `<span class="holiday-badge">${data.holiday_name}</span>`
@@ -222,8 +240,7 @@ async function handleProposalAction(action) {
       headers: authHeaders(),
     });
   } catch (e) {
-    showStatusBanner('処理に失敗しました', 'error');
-    setTimeout(hideStatusBanner, 3000);
+    flashStatus('処理に失敗しました', 'error');
     return;
   }
 
@@ -258,9 +275,7 @@ function syncProposals(proposals) {
 document.getElementById('btn-approve').addEventListener('click', () => handleProposalAction('approve'));
 document.getElementById('btn-reject').addEventListener('click', () => handleProposalAction('reject'));
 document.getElementById('proposals-badge').addEventListener('click', openProposalsModal);
-document.getElementById('proposals-overlay').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('proposals-overlay')) closeProposalsModal();
-});
+dismissOnBackdrop('proposals-overlay', closeProposalsModal);
 
 // ===== 天気描画 =====
 function formatTempDelta(d) {
@@ -466,9 +481,7 @@ function closeWeeklyModal() {
 
 document.getElementById('weekly-settings-btn').addEventListener('click', openWeeklyModal);
 document.getElementById('weekly-close-btn').addEventListener('click', closeWeeklyModal);
-document.getElementById('weekly-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('weekly-overlay')) closeWeeklyModal();
-});
+dismissOnBackdrop('weekly-overlay', closeWeeklyModal);
 
 // 追加フォーム
 const addTitleInput = document.getElementById('weekly-add-title');
@@ -482,8 +495,7 @@ addBtn.addEventListener('click', async () => {
   const title = addTitleInput.value.trim();
   const days = getSelectedDays('weekly-add-days');
   if (!title || days.length === 0) {
-    showStatusBanner('タスク名と曜日を入力してください', 'warning');
-    setTimeout(hideStatusBanner, 2000);
+    flashStatus('タスク名と曜日を入力してください', 'warning', 2000);
     return;
   }
   const res = await fetch('/api/weekly-tasks', {
@@ -533,11 +545,7 @@ function renderWeek(data) {
   for (const day of data.days) {
     const d = new Date(day.date + 'T00:00:00');
     const jsDay = d.getDay(); // 0=日, 6=土
-
-    // 色分け: 祝日・日曜→赤、土曜→青（当日表示と同じルール）
-    let dayClass = '';
-    if (day.is_holiday || jsDay === 0) dayClass = 'holiday';
-    else if (jsDay === 6) dayClass = 'saturday';
+    const dayClass = dateColorClass(jsDay, day.is_holiday);
 
     const col = document.createElement('div');
     col.className = 'week-day' + (day.is_today ? ' today' : '');
@@ -582,9 +590,7 @@ function renderWeek(data) {
 
 document.getElementById('week-view-btn').addEventListener('click', openWeekModal);
 document.getElementById('week-close-btn').addEventListener('click', closeWeekModal);
-document.getElementById('week-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('week-overlay')) closeWeekModal();
-});
+dismissOnBackdrop('week-overlay', closeWeekModal);
 
 // ===== タップ処理（重複排除付き） =====
 const pendingRequests = new Map();
@@ -629,8 +635,7 @@ async function handleTaskTap(el, task) {
       } else {
         el.classList.remove('completed');
       }
-      showStatusBanner('タスク更新に失敗しました', 'error');
-      setTimeout(hideStatusBanner, 3000);
+      flashStatus('タスク更新に失敗しました', 'error');
     }
   } finally {
     pendingRequests.delete(task.id);

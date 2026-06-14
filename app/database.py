@@ -12,6 +12,12 @@ DB_PATH = "dashboard.db"
 _connection: aiosqlite.Connection | None = None
 
 
+def _rows_to_dicts(cursor: aiosqlite.Cursor, rows: list) -> list[dict]:
+    """SELECT * 系の結果を列名つき dict のリストに変換する（cursor は open のまま渡す）。"""
+    cols = [d[0] for d in cursor.description]
+    return [dict(zip(cols, row)) for row in rows]
+
+
 async def get_connection() -> aiosqlite.Connection:
     global _connection
     if _connection is None:
@@ -146,8 +152,7 @@ async def get_pending_proposals() -> list[dict]:
             "SELECT * FROM event_proposals WHERE status = 'pending' ORDER BY event_date, time_start"
         ) as cursor:
             rows = await cursor.fetchall()
-            cols = [d[0] for d in cursor.description]
-        return [dict(zip(cols, row)) for row in rows]
+            return _rows_to_dicts(cursor, rows)
     except Exception:
         logger.error("承認待ち提案の取得に失敗しました", exc_info=True)
         return []
@@ -175,8 +180,7 @@ async def get_proposal_by_id(proposal_id: str) -> dict | None:
             row = await cursor.fetchone()
             if row is None:
                 return None
-            cols = [d[0] for d in cursor.description]
-        return dict(zip(cols, row))
+            return _rows_to_dicts(cursor, [row])[0]
     except Exception:
         logger.error("提案の取得に失敗しました: %s", proposal_id, exc_info=True)
         return None
@@ -228,8 +232,7 @@ async def get_weather_cache(date_str: str) -> dict | None:
             row = await cursor.fetchone()
             if row is None:
                 return None
-            cols = [d[0] for d in cursor.description]
-        return dict(zip(cols, row))
+            return _rows_to_dicts(cursor, [row])[0]
     except Exception:
         logger.error("天気キャッシュの取得に失敗しました: %s", date_str, exc_info=True)
         return None
@@ -270,11 +273,10 @@ async def get_all_weekly_tasks() -> list[dict]:
             "SELECT id, title, weekdays, sort_order FROM weekly_tasks ORDER BY sort_order, created_at"
         ) as cursor:
             rows = await cursor.fetchall()
-            cols = [d[0] for d in cursor.description]
-        return [
-            {**dict(zip(cols, row)), "weekdays": _parse_weekdays(dict(zip(cols, row))["weekdays"])}
-            for row in rows
-        ]
+            tasks = _rows_to_dicts(cursor, rows)
+        for t in tasks:
+            t["weekdays"] = _parse_weekdays(t["weekdays"])
+        return tasks
     except Exception:
         logger.error("曜日タスクの取得に失敗しました", exc_info=True)
         return []
