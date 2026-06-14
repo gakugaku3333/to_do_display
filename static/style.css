@@ -5,17 +5,20 @@
 }
 
 :root {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --border: #30363d;
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --accent-husband: #4A90D9;
-  --accent-wife: #E86A9A;
-  --overdue-bg: #3d1010;
-  --overdue-accent: #f85149;
+  --bg: #ffffff;            /* パネル本体（明るい白） */
+  --surface: #fff6ec;       /* ヘッダー/モーダル等のやわらかいクリーム面 */
+  --surface-sky: #eef5ff;   /* 天気バーのソフトな空色 */
+  --border: #efe6d8;        /* 暖色のやさしい境界線 */
+  --text-primary: #3b3540;  /* 読みやすいダークスレート */
+  --text-secondary: #97897a;/* 暖色グレー */
+  --accent-husband: #3b82f6;
+  --accent-wife: #ec4899;
+  --accent-sky: #2f80ed;
+  --accent-sun: #f5a623;
+  --overdue-bg: #fff0ee;    /* 明るい背景上の期限切れ（淡い赤） */
+  --overdue-accent: #ef5350;
   --completed-opacity: 0.4;
-  --radius: 12px;
+  --radius: 14px;
   --font: 'Noto Sans JP', sans-serif;
 }
 
@@ -26,7 +29,7 @@ html, body {
   background: var(--bg);
   color: var(--text-primary);
   font-family: var(--font);
-  font-size: 16px;
+  font-size: 21px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -67,16 +70,25 @@ body {
 #header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px;
-  background: var(--surface);
+  gap: 20px;
+  padding: 8px 24px;
+  background: linear-gradient(120deg, #ffe6cf 0%, #ffd9e7 48%, #d6e9ff 100%);
   border-bottom: 1px solid var(--border);
-  height: 72px;
+  height: 92px;
   flex-shrink: 0;
+  position: relative;
+}
+
+#datetime {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  line-height: 1.1;
 }
 
 #clock {
-  font-size: 2.8rem;
+  font-size: 1.8rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-primary);
@@ -84,22 +96,20 @@ body {
 }
 
 #date-info {
-  font-size: 1.1rem;
-  color: var(--text-secondary);
-  text-align: right;
+  font-size: 1.8rem;
+  color: var(--text-primary);
 }
 
 .date-main {
-  font-size: 1.1rem;
-  color: var(--text-secondary);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
-.date-main.holiday {
-  color: #f85149;
-}
-
+/* 日付テキストは時刻と揃えて常に黒。曜日の色分けは祝日名バッジ側で表現する。 */
+.date-main.holiday,
 .date-main.saturday {
-  color: #79c0ff;
+  color: var(--text-primary);
 }
 
 .holiday-badge {
@@ -115,10 +125,13 @@ body {
 }
 
 #last-refresh {
+  position: absolute;
+  bottom: 4px;
+  left: 24px;
   font-size: 0.75rem;
+  line-height: 1;
   color: var(--text-secondary);
   opacity: 0.6;
-  margin-top: 2px;
 }
 
 /* ===== WEATHER BAR ===== */
@@ -126,38 +139,38 @@ body {
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 0 24px;
-  height: 128px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
 }
 
 #weather-summary {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
   flex-shrink: 0;
-  padding-right: 40px;
+  padding-right: 18px;
   border-right: 1px solid var(--border);
-  margin-right: 40px;
-  min-width: 360px;
+  margin-right: 18px;
 }
 
 #weather-emoji {
-  font-size: 3.2rem;
+  font-size: 2.5rem;
   line-height: 1;
 }
 
 #weather-condition {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 500;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 #weather-temp {
-  font-size: 1.7rem;
-  color: var(--text-secondary);
+  font-size: 1.35rem;
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
@@ -165,46 +178,23 @@ body {
   display: flex;
   gap: 16px;
   flex: 1;
-  align-items: flex-end;
-  height: 96px;
-  padding-bottom: 8px;
+  align-items: center;
 }
 
 .precip-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   max-width: 112px;
 }
 
-.precip-bar-wrap {
-  width: 100%;
-  height: 44px;
-  display: flex;
-  align-items: flex-end;
-  background: rgba(255,255,255,0.04);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.precip-bar {
-  width: 100%;
-  min-height: 4px;
-  border-radius: 6px 6px 0 0;
-  transition: height 0.4s ease;
-}
-
-.precip-bar.none  { background: var(--border); }
-.precip-bar.low   { background: #58a6ff; opacity: 0.5; }
-.precip-bar.mid   { background: #58a6ff; }
-.precip-bar.high  { background: #388bfd; }
-
 .precip-time {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   color: var(--text-secondary);
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .precip-pct {
@@ -214,9 +204,9 @@ body {
 }
 
 .precip-pct.none { color: var(--text-secondary); opacity: 0.5; }
-.precip-pct.low  { color: #58a6ff; }
-.precip-pct.mid  { color: #58a6ff; }
-.precip-pct.high { color: #79c0ff; }
+.precip-pct.low  { color: #4aa3f0; }
+.precip-pct.mid  { color: #2f80ed; }
+.precip-pct.high { color: #1b6fd6; }
 
 /* ===== MAIN LAYOUT ===== */
 #main {
@@ -260,18 +250,24 @@ body {
 .panel-header {
   display: flex;
   align-items: center;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .panel-title {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 14px 20px 10px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #7d6f5f;
+  letter-spacing: 0.04em;
+  padding: 13px 20px;
   border-bottom: none;
+}
+
+/* .panel-header は横並びなので、タイトルを伸ばして⚙ボタンを右端へ寄せる。
+   events/stock のタイトルは .panel(縦並び) の直接の子のため flex:1 を付けない
+   （付けると縦に伸びてリストを下へ押し下げてしまう）。 */
+.panel-header .panel-title {
   flex: 1;
 }
 
@@ -389,7 +385,7 @@ body {
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  border: 2px solid var(--border);
+  border: 2px solid #cdbfac;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -471,7 +467,7 @@ body {
   font-family: var(--font);
   cursor: pointer;
   z-index: 500;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 14px rgba(243,156,18,0.35);
   -webkit-tap-highlight-color: transparent;
 }
 

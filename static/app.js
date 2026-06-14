@@ -52,10 +52,10 @@ function updateDateDisplay(data) {
     ? `<span class="holiday-badge">${data.holiday_name}</span>`
     : '';
 
-  dateEl.innerHTML = `
-    <div class="date-main ${dayClass}">${year}年${month}月${day}日（${data.weekday.replace('曜日', '')}）${holidayBadge}</div>
-    <div id="last-refresh">${refreshText}</div>
-  `;
+  dateEl.innerHTML = `<span class="date-main ${dayClass}">${year}年${month}月${day}日（${data.weekday.replace('曜日', '')}）${holidayBadge}</span>`;
+
+  const refreshEl = document.getElementById('last-refresh');
+  if (refreshEl) refreshEl.textContent = refreshText;
 }
 
 // ===== イベント描画 =====
@@ -289,9 +289,6 @@ function renderWeather(weather) {
     const block = document.createElement('div');
     block.className = 'precip-block';
     block.innerHTML = `
-      <div class="precip-bar-wrap">
-        <div class="precip-bar ${level}" style="height:${p}%"></div>
-      </div>
       <div class="precip-time">${h.label}</div>
       <div class="precip-pct ${level}">${p}%</div>
     `;
