@@ -28,6 +28,7 @@ OWNER_COLORS = {
     "wife": "#E86A9A",
     "family": "#2ecc71",
 }
+DEFAULT_OWNER_COLOR = "#888888"
 
 def get_credentials(account_name: str) -> Credentials | None:
     token_path = os.path.join(TOKENS_DIR, f"{account_name}.json")
@@ -79,7 +80,7 @@ def _parse_event(event: dict, owner: str, tz: ZoneInfo) -> CalendarEvent:
             end_time=end_dt.strftime("%H:%M"),
             is_all_day=False,
             owner=owner,
-            color=OWNER_COLORS.get(owner, "#888888"),
+            color=OWNER_COLORS.get(owner, DEFAULT_OWNER_COLOR),
         )
     else:
         return CalendarEvent(
@@ -89,7 +90,7 @@ def _parse_event(event: dict, owner: str, tz: ZoneInfo) -> CalendarEvent:
             end_time=None,
             is_all_day=True,
             owner=owner,
-            color=OWNER_COLORS.get(owner, "#888888"),
+            color=OWNER_COLORS.get(owner, DEFAULT_OWNER_COLOR),
         )
 
 

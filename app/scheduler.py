@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import jpholiday
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from app.config import settings
 from app.data_assembler import broadcast_current_data
 from app.database import cleanup_old_flow_completions
 from app.models import CalendarEvent, Task, TodayData, WeatherData, WEEKDAYS_JA
@@ -48,7 +49,7 @@ async def refresh_data():
 
     events: list[CalendarEvent] = []
     try:
-        events = await asyncio.to_thread(google_calendar.fetch_today_events)
+        events = await asyncio.to_thread(google_calendar.fetch_today_events, settings.timezone)
     except Exception:
         logger.error("Google Calendar の取得に失敗しました", exc_info=True)
 
@@ -59,19 +60,19 @@ async def refresh_data():
     except Exception:
         logger.error("iCloud Reminders の取得に失敗しました", exc_info=True)
 
-    now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
+    now_local = datetime.now(ZoneInfo(settings.timezone))
     _cached_data = TodayData(
         date=today_str,
         weekday=weekday_ja,
         events=events,
         stock_tasks=stock_tasks,
         flow_tasks=flow_tasks,
-        last_refresh=now_jst.strftime("%H:%M"),
+        last_refresh=now_local.strftime("%H:%M"),
         weather=_cached_weather,
         is_holiday=is_holiday,
         holiday_name=holiday_name,
     )
-    _last_refresh = now_jst
+    _last_refresh = now_local
     logger.info("データ更新完了: %s %s", today_str, weekday_ja)
 
     await broadcast_current_data()
@@ -90,10 +91,10 @@ def start_scheduler():
         refresh_data, "interval", minutes=5,
         id="refresh_data", max_instances=1, coalesce=True,
     )
-    # 毎朝 6:15 JST に天気予報を更新
+    # 毎朝 6:15 に天気予報を更新
     _scheduler.add_job(
         refresh_weather, "cron",
-        hour=6, minute=15, timezone="Asia/Tokyo",
+        hour=6, minute=15, timezone=settings.timezone,
         id="refresh_weather", max_instances=1, coalesce=True,
     )
     _scheduler.start()
