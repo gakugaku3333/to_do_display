@@ -10,6 +10,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from app.config import settings
 from app.models import CalendarEvent
 
 logger = logging.getLogger(__name__)
@@ -26,9 +27,6 @@ OWNER_COLORS = {
     "wife": "#E86A9A",
     "family": "#2ecc71",
 }
-
-FAMILY_CALENDAR_ID = "family15100549285521733578@group.calendar.google.com"
-
 
 def get_credentials(account_name: str) -> Credentials | None:
     token_path = os.path.join(TOKENS_DIR, f"{account_name}.json")
@@ -137,6 +135,9 @@ def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
     all_events: list[CalendarEvent] = []
     seen_ids: set[str] = set()
 
+    excluded_ids = settings.excluded_calendar_ids_set
+    family_calendar_id = settings.family_calendar_id
+
     for account_name in ("husband", "wife"):
         creds = get_credentials(account_name)
         if not creds:
@@ -147,9 +148,12 @@ def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
             calendars = service.calendarList().list().execute().get("items", [])
 
             # calendarList に含まれていないファミリーカレンダーを明示的に追加
-            cal_ids_with_owner: list[tuple[str, str]] = [(cal["id"], account_name) for cal in calendars]
-            if account_name == "husband":
-                cal_ids_with_owner.append((FAMILY_CALENDAR_ID, "family"))
+            cal_ids_with_owner: list[tuple[str, str]] = [
+                (cal["id"], account_name) for cal in calendars
+                if cal["id"] not in excluded_ids
+            ]
+            if account_name == "husband" and family_calendar_id:
+                cal_ids_with_owner.append((family_calendar_id, "family"))
 
             for cal_id, owner in cal_ids_with_owner:
                 try:
