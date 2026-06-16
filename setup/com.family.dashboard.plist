@@ -7,8 +7,7 @@
 
   <key>ProgramArguments</key>
   <array>
-    <!-- Python の絶対パスに変更してください: which python3 または which uvicorn で確認 -->
-    <string>/usr/local/bin/uvicorn</string>
+    <string>/Users/ooishiayumi/Projects/to_do_display/.venv/bin/uvicorn</string>
     <string>app.main:app</string>
     <string>--host</string>
     <string>0.0.0.0</string>
@@ -16,15 +15,15 @@
     <string>8080</string>
   </array>
 
-  <!-- プロジェクトディレクトリの絶対パスに変更してください -->
   <key>WorkingDirectory</key>
-  <string>/Users/YOUR_USERNAME/to_do_display</string>
+  <string>/Users/ooishiayumi/Projects/to_do_display</string>
 
   <key>EnvironmentVariables</key>
   <dict>
-    <!-- Python の仮想環境を使用する場合は PATH を設定 -->
     <key>PATH</key>
-    <string>/usr/local/bin:/usr/bin:/bin</string>
+    <string>/Users/ooishiayumi/Projects/to_do_display/.venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>/Users/ooishiayumi</string>
   </dict>
 
   <key>RunAtLoad</key>
@@ -34,9 +33,9 @@
   <true/>
 
   <key>StandardOutPath</key>
-  <string>/var/log/family-dashboard.log</string>
+  <string>/Users/ooishiayumi/Library/Logs/family-dashboard.log</string>
 
   <key>StandardErrorPath</key>
-  <string>/var/log/family-dashboard.error.log</string>
+  <string>/Users/ooishiayumi/Library/Logs/family-dashboard.error.log</string>
 </dict>
 </plist>

@@ -1,9 +1,15 @@
 .env
 tokens/
 *.db
+*.db-shm
+*.db-wal
 __pycache__/
 *.pyc
 *.pyo
 .venv/
 venv/
 .DS_Store
+logs/
+credentials.json
+*.png
+*.jpg

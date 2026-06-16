@@ -3,38 +3,123 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="api-token" content="__API_TOKEN__">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>家族ダッシュボード</title>
+  <link rel="manifest" href="/static/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  <div id="status-banner" class="hidden"></div>
+
   <header id="header">
-    <div id="clock"></div>
-    <div id="date-info"></div>
-    <div id="refresh-indicator" class="hidden">更新中...</div>
+    <div id="datetime">
+      <span id="date-info"></span>
+      <span id="clock"></span>
+    </div>
+    <div id="weather-bar">
+      <div id="weather-summary">
+        <span id="weather-emoji">—</span>
+        <span id="weather-condition">取得中…</span>
+        <span id="weather-temp"></span>
+      </div>
+      <div id="weather-hourly"></div>
+    </div>
+    <div id="last-refresh"></div>
   </header>
 
   <main id="main">
     <section id="events-section" class="panel">
-      <h2 class="panel-title">📅 今日の予定</h2>
+      <div class="panel-header">
+        <h2 class="panel-title">📅 今日の予定</h2>
+        <button id="week-view-btn" class="panel-settings-btn" title="今週の予定を表示">📆</button>
+      </div>
       <div id="events-list" class="item-list"></div>
     </section>
 
     <div id="tasks-column">
-      <section id="stock-section" class="panel">
-        <h2 class="panel-title">📌 期限付きToDo</h2>
-        <div id="stock-list" class="item-list"></div>
+      <section id="flow-section" class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title" id="flow-title">🔄 今日のやる事リスト</h2>
+          <button id="weekly-settings-btn" class="panel-settings-btn" title="曜日タスクを設定">⚙</button>
+        </div>
+        <div id="flow-list" class="item-list"></div>
       </section>
 
-      <section id="flow-section" class="panel">
-        <h2 class="panel-title" id="flow-title">🔄 本日の曜日タスク</h2>
-        <div id="flow-list" class="item-list"></div>
+      <section id="stock-section" class="panel">
+        <h2 class="panel-title">📌 やる事リスト</h2>
+        <div id="stock-list" class="item-list"></div>
       </section>
     </div>
   </main>
 
+  <!-- 学校配布物 提案モーダル -->
+  <div id="proposals-overlay" class="hidden">
+    <div id="proposals-modal">
+      <div id="proposals-header">
+        <span id="proposals-title">📄 学校配布物の予定</span>
+        <span id="proposals-counter"></span>
+      </div>
+      <div id="proposals-card-area">
+        <div id="proposals-card"></div>
+      </div>
+      <div id="proposals-actions">
+        <button id="btn-reject" class="proposal-btn reject-btn">✕ 却下</button>
+        <button id="btn-approve" class="proposal-btn approve-btn">✓ カレンダーに追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 曜日タスク設定モーダル -->
+  <div id="weekly-overlay" class="hidden">
+    <div id="weekly-modal">
+      <div id="weekly-modal-header">
+        <span>🗓 曜日タスク設定</span>
+        <button id="weekly-close-btn">✕</button>
+      </div>
+      <div id="weekly-task-list"></div>
+      <div id="weekly-add-form">
+        <input id="weekly-add-title" type="text" placeholder="タスク名を入力…" maxlength="50">
+        <div id="weekly-add-days" class="day-selector"></div>
+        <button id="weekly-add-btn" disabled>追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 週間予定モーダル -->
+  <div id="week-overlay" class="hidden">
+    <div id="week-modal">
+      <div id="week-modal-header">
+        <span id="week-modal-title">📆 今週の予定</span>
+        <button id="week-close-btn">✕</button>
+      </div>
+      <div id="week-body">
+        <div id="week-loading">読み込み中…</div>
+        <div id="week-days"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提案バッジ（通知ドット） -->
+  <button id="proposals-badge" class="hidden" aria-label="学校配布物の提案を確認"></button>
+
   <script src="/static/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      // 新しい Service Worker がコントローラを取得したら一度だけリロードして反映。
+      // （多重リロードを防ぐため refreshing フラグでガード）
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+      navigator.serviceWorker.register('/static/sw.js');
+    }
+  </script>
 </body>
 </html>

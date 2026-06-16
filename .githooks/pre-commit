@@ -1,0 +1,23 @@
+#!/bin/bash
+# コミット前に必ずテストスイートを実行する。
+# API契約（URL/リクエストボディ）を変更したのにテストを更新し忘れると、
+# 旧ルートへのリクエストが 404 を返し、別の失敗（認証エラー等）に化けて
+# 見逃される。緑でないコミットを物理的に止めることで再発を防ぐ。
+#
+# 緊急時は `git commit --no-verify` でスキップ可能。
+set -e
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+if [ -f .venv/bin/activate ]; then
+    source .venv/bin/activate
+fi
+
+echo "pre-commit: pytest を実行中..."
+if ! python3 -m pytest -q; then
+    echo ""
+    echo "✗ テストが失敗しました。修正してから再度コミットしてください。"
+    echo "  （どうしても緊急で回避する場合のみ: git commit --no-verify）"
+    exit 1
+fi
