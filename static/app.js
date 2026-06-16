@@ -329,7 +329,7 @@ function renderAll(data) {
   renderEvents(data.events);
   renderTasks(data.stock_tasks, 'stock-list');
   renderTasks(data.flow_tasks, 'flow-list');
-  document.getElementById('flow-title').textContent = `🔄 ${data.weekday}のタスク`;
+  document.getElementById('flow-title').textContent = '🔄 今日のやる事リスト';
   syncProposals(data.proposals || []);
 }
 

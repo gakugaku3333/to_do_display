@@ -29,6 +29,7 @@ Android タブレット (ブラウザ / PWA)
         │  HTTP (port 8080)
         │
         ├── SSE:  GET  /api/stream              → リアルタイムデータ配信
+        ├── REST: GET  /api/briefing            → 朝の音声ブリーフィング読み上げテキスト（平文）
         ├── REST: POST /api/tasks/complete       → タスク完了（IDはボディで送る）
         ├── REST: POST /api/tasks/uncomplete     → 完了取消
         ├── REST: GET  /api/weekly-tasks         → 曜日タスク一覧
