@@ -39,7 +39,7 @@ class EventProposal(BaseModel):
 
 
 class WeatherHour(BaseModel):
-    label: str        # 例: "〜6時", "〜12時", "〜翌0時"
+    label: str        # 例: "6時〜", "12時〜", "翌0時〜"
     precip_prob: int  # 0–100 (%)
 
 

@@ -107,9 +107,9 @@ def fetch_weather() -> dict | None:
                     continue
                 dt = datetime.fromisoformat(time_str).astimezone(_JST)
                 if dt.date() == today:
-                    label = f"〜{dt.hour}時"
+                    label = f"{dt.hour}時〜"
                 elif dt.date() == tomorrow and dt.hour == 0:
-                    label = "〜翌0時"
+                    label = "翌0時〜"
                 else:
                     continue  # 翌日以降のデータは不要
                 hourly_precip.append({"label": label, "precip_prob": int(pop_str)})
