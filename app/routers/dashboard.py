@@ -4,11 +4,12 @@ import time
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from app.auth import verify_token
 from app.data_assembler import get_current_data, get_empty_data, get_week_data
 from app.models import WeekData
+from app.services.briefing import build_briefing_text
 from app.sse import sse_manager
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,19 @@ async def week_view() -> WeekData:
     data = await get_week_data()
     _week_cache = (now, today, data)
     return data
+
+
+@router.get("/api/briefing", dependencies=[Depends(verify_token)])
+async def briefing() -> PlainTextResponse:
+    """朝の音声ブリーフィング用の読み上げテキストを平文で返す。
+
+    iOS ショートカット（個人用オートメーション）から毎朝呼び出し、
+    「テキストを読み上げる」アクションで再生する想定。
+    """
+    data = await get_current_data()
+    if data is None:
+        data = get_empty_data()
+    return PlainTextResponse(build_briefing_text(data), headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/api/stream", dependencies=[Depends(verify_token)])
