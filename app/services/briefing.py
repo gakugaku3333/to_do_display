@@ -67,21 +67,12 @@ def _events_phrase(data: TodayData) -> str:
 
 
 def _tasks_phrase(data: TodayData) -> str:
-    # flow_tasks には曜日タスク（task_type=="weekly"）も合流済み。
-    # 曜日ごとのタスクは別立てで読み上げる。
     weekday = [t.title for t in data.flow_tasks if t.task_type == "weekly"]
-    todo = [t.title for t in data.flow_tasks if t.task_type != "weekly"]
-    todo += [t.title for t in data.stock_tasks]
 
-    if not weekday and not todo:
+    if not weekday:
         return "今日のやることはありません。"
 
-    parts: list[str] = []
-    if todo:
-        parts.append(f"今日のやることは、{'、'.join(todo)}、以上です。")
-    if weekday:
-        parts.append(f"曜日ごとのやることは、{'、'.join(weekday)}、以上です。")
-    return "".join(parts)
+    return f"今日のやることは、{'、'.join(weekday)}、以上です。"
 
 
 def build_briefing_text(data: TodayData) -> str:
