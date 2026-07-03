@@ -13,6 +13,9 @@ M4 Mac mini 上で動作するFastAPIバックエンドと、ダイニングのA
 - **朝の音声ブリーフィング**（`/api/briefing` が日付・天気・予定・やる事の読み上げ用テキストを返す。iPhoneのショートカット個人用オートメーションで毎朝7時に読み上げ）
 - SSEリアルタイム更新、5分ごと自動同期
 - PWA対応（フルスクリーン・オフラインキャッシュ）
+- **セルフ診断**（`/api/health`）: Google認証の失効・失効間近、各データソースの同期停止を検知し、画面上部に警告バナー表示
+- `dashboard.db` の日次自動バックアップ（7世代ローテーション）
+- `scripts/deploy.sh` によるデプロイ自動化（pytest通過確認 → launchd再起動 → 起動確認）
 
 ## セットアップ手順
 
@@ -82,6 +85,14 @@ cp setup/com.family.dashboard.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.family.dashboard.plist
 ```
 
+### 7. コード更新時のデプロイ
+
+手動手順ではなく `scripts/deploy.sh` を使う（pull → pytest → launchd再起動 → 起動確認を自動化）。
+
+```bash
+./scripts/deploy.sh
+```
+
 ## タスクの使い方
 
 | タスク種別 | Reminders リスト | 動作 |
@@ -98,12 +109,13 @@ to_do_display/
 │   ├── routers/          # APIエンドポイント（dashboard/tasks/weekly_tasks等）
 │   ├── services/         # 外部サービス連携（google_calendar/icloud_reminders/weather/gemini）
 │   ├── models.py         # Pydanticモデル（TodayData等）
-│   ├── scheduler.py      # APScheduler（5分データ更新・6:15天気更新）
+│   ├── scheduler.py      # APScheduler（5分データ更新・6:15天気更新・3:00DBバックアップ）
 │   └── data_assembler.py # キャッシュ＋DB完了状態マージ
 ├── static/               # フロントエンド (HTML/CSS/JS/SW)
-├── scripts/              # AppleScriptファイル
+├── scripts/              # AppleScriptファイル・deploy.sh
 ├── setup/                # Mac mini launchd設定ファイル
 ├── tokens/               # Google OAuth2トークン（git管理外）
+├── backups/              # dashboard.db 日次バックアップ（git管理外・7世代）
 ├── samples/              # 学校配布物スキャン機能のテスト用サンプル画像（git管理外）
 ├── .env                  # 認証情報（git管理外）
 ├── .env.example          # 環境変数テンプレート

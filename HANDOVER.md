@@ -145,6 +145,8 @@ python setup_google_auth.py wife
 `tokens/husband.json`, `tokens/wife.json` が生成されれば成功。
 
 > **注意:** トークンは約6ヶ月で失効。症状は「予定が急に消える」。`logs/dashboard.log` で `invalid_grant` を確認して再実行。
+> `/api/health` がトークンの残り健全性を自己診断しており（失効・期限接近を検知）、
+> 失効時はダッシュボード画面上部に警告バナーが常時表示され、朝のブリーフィングにも再認証を促す文言が入る。
 
 #### ファミリーカレンダー
 
@@ -219,6 +221,39 @@ launchctl load ~/Library/LaunchAgents/com.family.dashboard.plist
 |------|----------|
 | `ProgramArguments[0]` | `.venv/bin/uvicorn` の絶対パスに変更 |
 | `WorkingDirectory` | 実際のプロジェクトパスに変更 |
+
+### デプロイスクリプト（`scripts/deploy.sh`）
+
+コード更新の口伝手順（pull → pytest → launchd再起動 → 起動確認）をスクリプト化したもの。
+**今後のコード更新は手作業ではなくこのスクリプトを使う。**
+
+```bash
+./scripts/deploy.sh                 # 通常デプロイ
+./scripts/deploy.sh --clear-weather # 天気の表示書式を変えた時など、当日分weather_cacheも削除
+```
+
+pytest が赤の場合は launchd の再起動を行わずに中断する。起動後は `/api/health` を
+最大30秒ポーリングして疎通確認する。
+
+### dashboard.db の日次バックアップ
+
+`app/scheduler.py` の `backup_database` を毎日 3:00 に実行し、`backups/dashboard-YYYY-MM-DD.db`
+として保存（直近7世代のみ保持）。曜日タスク・学校配布物提案は dashboard.db にしか無いデータなので、
+誤操作やディスク障害時の保険になる。`backups/` は git 管理外。
+
+### mDNS でのIP依存排除（要検証）
+
+キオスクのURLを `http://<IPアドレス>:8080` にしていると、DHCPでMacのIPが変わるたびに
+キオスク側の設定変更が必要になる（`feedback_mac_ip_dhcp` 参照）。macOSは標準でBonjour(mDNS)に
+対応しているため、`http://<Macのホスト名>.local:8080` でアクセスできないか確認する。
+
+```bash
+# Macのホスト名を確認
+scutil --get LocalHostName
+```
+
+**注意:** タブレット（TAB-A05-BA1 / Android 9）がmDNS解決に対応しているかは実機での確認が必要。
+非対応の場合はルーター側でMacのMACアドレスにDHCP固定IPを予約する方式にフォールバックすること。
 
 ---
 
@@ -336,6 +371,7 @@ python -m pytest tests/ -v
 
 | 症状 | 原因と対処 |
 |------|-----------|
+| 画面上部に黄色の警告バナーが出る | `/api/health` の `warnings` を確認（`curl localhost:8080/api/health \| jq .warnings`）。トークン失効/期限接近、または各データソースの同期停止を検知している |
 | 予定が急に表示されなくなった | Google OAuth トークン期限切れ（約6ヶ月）。`logs/dashboard.log` で `invalid_grant` 確認 → `python setup_google_auth.py husband` 等で再認証 |
 | 天気が表示されない / 古い | `python3 -c "from app.services.weather import fetch_weather; print(fetch_weather())"` で単体確認。ネットワーク問題ならサーバー再起動で再取得 |
 | チェックしてもタスクが消えない | `POST /api/tasks/complete` が 404 になっていないかブラウザDevToolsで確認。正常なら200でSSE再配信後に消える |

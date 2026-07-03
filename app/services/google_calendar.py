@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -72,6 +73,39 @@ def get_credentials(account_name: str) -> Credentials | None:
             creds = None
 
     return creds if (creds and creds.valid) else None
+
+
+def get_token_status(account_name: str) -> dict:
+    """トークンファイルの健全性を返す（/api/health のセルフ診断用）。
+
+    実際にリフレッシュを試みて invalid_grant（要再認証）を検出する。
+    トークンは約6ヶ月で失効するため（feedback_google_oauth_expiry）、
+    age_days も合わせて返し、失効前に気づけるようにする。
+    """
+    token_path = os.path.join(TOKENS_DIR, f"{account_name}.json")
+    if not os.path.exists(token_path):
+        return {"configured": False, "valid": False, "age_days": None, "error": None}
+
+    age_days = round((time.time() - os.path.getmtime(token_path)) / 86400, 1)
+
+    try:
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+    except Exception:
+        logger.warning("%s のトークンファイル読み込みに失敗しました", account_name, exc_info=True)
+        return {"configured": True, "valid": False, "age_days": age_days, "error": "parse_error"}
+
+    if creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+            with open(token_path, "w") as f:
+                f.write(creds.to_json())
+            age_days = 0.0
+        except Exception as exc:
+            error = "invalid_grant" if "invalid_grant" in str(exc) else "refresh_failed"
+            logger.warning("%s のトークン更新に失敗しました (%s)", account_name, error)
+            return {"configured": True, "valid": False, "age_days": age_days, "error": error}
+
+    return {"configured": True, "valid": bool(creds.valid), "age_days": age_days, "error": None}
 
 
 def setup_google_auth(account_name: str):

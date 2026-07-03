@@ -66,6 +66,20 @@ body {
   color: #fff;
 }
 
+/* ===== HEALTH BANNER (永続的なセルフ診断警告。SSE用の一時バナーとは別枠で、
+   通常フロー内に配置し、消えるまでレイアウトを押し下げ続ける) ===== */
+#health-banner {
+  padding: 6px 16px;
+  text-align: center;
+  font-size: 0.8rem;
+  background: #d29922;
+  color: #000;
+}
+
+#health-banner.hidden {
+  display: none;
+}
+
 /* ===== HEADER ===== */
 #header {
   display: flex;

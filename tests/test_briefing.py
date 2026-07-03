@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from app.models import Task, TodayData, WeatherData, WeatherHour
@@ -86,6 +88,23 @@ def test_build_briefing_text_holiday():
     )
     text = build_briefing_text(data)
     assert "元日でお休みです。" in text
+
+
+def test_build_briefing_text_includes_reauth_warning():
+    data = TodayData(
+        date="2026-06-16",
+        weekday="火曜日",
+        events=[],
+        stock_tasks=[],
+        flow_tasks=[],
+    )
+    fake_status = {
+        "husband": {"configured": True, "valid": False, "age_days": 200.0, "error": "invalid_grant"},
+        "wife": {"configured": False, "valid": False, "age_days": None, "error": None},
+    }
+    with patch("app.services.briefing.get_token_status", lambda account: fake_status[account]):
+        text = build_briefing_text(data)
+    assert "夫のカレンダー連携の再認証が必要です。" in text
 
 
 @pytest.mark.asyncio

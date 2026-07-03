@@ -10,6 +10,7 @@ __pycache__/
 venv/
 .DS_Store
 logs/
+backups/
 credentials.json
 *.png
 *.jpg

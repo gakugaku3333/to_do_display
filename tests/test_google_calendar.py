@@ -209,3 +209,39 @@ def test_family_calendar_skipped_when_unset():
         if call.kwargs.get("calendarId")
     }
     assert requested_ids == {"primary@example.com"}
+
+
+def test_get_token_status_not_configured():
+    with patch.object(google_calendar, "TOKENS_DIR", "/nonexistent-tokens-dir"):
+        status = google_calendar.get_token_status("husband")
+    assert status == {"configured": False, "valid": False, "age_days": None, "error": None}
+
+
+def test_get_token_status_valid_token(tmp_path):
+    token_path = tmp_path / "husband.json"
+    token_path.write_text('{"dummy": true}')
+
+    fake_creds = MagicMock(expired=False, valid=True)
+    with patch.object(google_calendar, "TOKENS_DIR", str(tmp_path)), \
+         patch.object(google_calendar.Credentials, "from_authorized_user_file", return_value=fake_creds):
+        status = google_calendar.get_token_status("husband")
+
+    assert status["configured"] is True
+    assert status["valid"] is True
+    assert status["error"] is None
+    assert status["age_days"] is not None
+
+
+def test_get_token_status_invalid_grant(tmp_path):
+    token_path = tmp_path / "husband.json"
+    token_path.write_text('{"dummy": true}')
+
+    fake_creds = MagicMock(expired=True, refresh_token="rt")
+    fake_creds.refresh.side_effect = Exception("invalid_grant: Token has been expired or revoked.")
+    with patch.object(google_calendar, "TOKENS_DIR", str(tmp_path)), \
+         patch.object(google_calendar.Credentials, "from_authorized_user_file", return_value=fake_creds):
+        status = google_calendar.get_token_status("husband")
+
+    assert status["configured"] is True
+    assert status["valid"] is False
+    assert status["error"] == "invalid_grant"
