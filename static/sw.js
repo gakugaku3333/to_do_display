@@ -2,7 +2,7 @@
 // ダッシュボードのオフライン対応とキャッシュ管理。
 //
 // キャッシュ戦略:
-//   - ナビゲーション(/) と app.js : network-first
+//   - ナビゲーション(/) と /static/js/* (ESモジュール一式) : network-first
 //       → コード/HTML の更新を常に即反映。オフライン時のみキャッシュにフォールバック。
 //   - その他の静的アセット(CSS/manifest/アイコン等) : stale-while-revalidate
 //       → 表示は即座（キャッシュ）、裏で最新を取得して次回に反映。
@@ -11,15 +11,16 @@
 //
 // 重要: 以前は全アセットが cache-first だったため、app.js を更新しても
 // 古いコードが配信され続ける問題があった。コード系を network-first にして解消。
+// app.js は Phase 1 で static/js/ 配下の ES Modules に分割された。
 
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `dashboard-${CACHE_VERSION}`;
 
-// オフライン起動に最低限必要なアセット
+// オフライン起動に最低限必要なアセット（依存モジュールは main.js の import で動的取得される）
 const PRECACHE_URLS = [
   '/',
   '/static/style.css',
-  '/static/app.js',
+  '/static/js/main.js',
   '/static/manifest.json',
 ];
 
@@ -100,8 +101,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ナビゲーションと app.js は network-first（コード更新を即反映）
-  if (request.mode === 'navigate' || url.pathname === '/static/app.js') {
+  // ナビゲーションと ESモジュール一式は network-first（コード更新を即反映）
+  if (request.mode === 'navigate' || url.pathname.startsWith('/static/js/')) {
     event.respondWith(networkFirst(request));
     return;
   }

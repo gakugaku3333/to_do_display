@@ -90,7 +90,13 @@ to_do_display/
 ├── static/
 │   ├── index.html               # メイン画面（PWA対応）
 │   ├── style.css                # ダークテーマCSS（祝日カラー含む）
-│   ├── app.js                   # SSEクライアント、タスク完了UI、曜日タスク管理UI
+│   ├── js/                      # ESモジュール一式（Phase 1 で app.js から分割）
+│   │   ├── main.js              # エントリポイント。SSE接続・WakeLock・初期化
+│   │   ├── state.js             # 単一の状態オブジェクト + subscribe/setState
+│   │   ├── api.js               # fetchラッパー（authHeaders集約、エラーは必ずstatusBannerへ）
+│   │   ├── utils.js             # escapeHtml・日付整形など
+│   │   └── components/          # clock/dateHeader/weather/events/tasks/proposals/
+│   │                            # weeklyTasks/weekModal/statusBanner/healthBanner
 │   ├── manifest.json            # PWAマニフェスト
 │   └── sw.js                    # Service Worker（オフラインキャッシュ）
 ├── tests/                       # pytest テストスイート
@@ -346,15 +352,32 @@ set_reminder_completed(task_id, True, [settings.stock_list_name])  # or flow_lis
 | リソース | 戦略 | 理由 |
 |---------|------|------|
 | `/`（ナビゲーション） | **network-first** | HTML/トークン変更を即反映 |
-| `/static/app.js` | **network-first** | JS 修正を即反映 |
+| `/static/js/*`（ESモジュール一式） | **network-first** | JS 修正を即反映 |
 | `/static/*.css`, manifest 等 | stale-while-revalidate | 表示を犠牲にせず裏で更新 |
 | `/api/*` | network-first | 常に最新データ |
 | `/api/stream` (SSE) | SW を通さない | ストリームを途切れさせない |
 
-**重要**: `sw.js` / `app.js` / `style.css` / `index.html` は FastAPI の専用ルートで `Cache-Control: no-cache` 配信。
-専用ルートは `app.mount("/static", ...)` より**前**に定義すること（後だと StaticFiles に飲み込まれる）。
+**重要**: `sw.js` / `static/js/**`（全ESモジュール） / `style.css` / `index.html` は FastAPI の専用ルートで
+`Cache-Control: no-cache` 配信。専用ルートは `app.mount("/static", ...)` より**前**に定義すること
+（後だと StaticFiles に飲み込まれる）。`/static/js/{filepath:path}` の1ルートで配下の全モジュールをカバーする
+ため、新しいコンポーネントファイルを追加してもルート追加は不要。
 
 SW の `install` では `cache.add(new Request(url, { cache: 'reload' }))` を使いHTTPキャッシュを迂回する。
+
+### フロントエンドのアーキテクチャ（Phase 1で刷新）
+
+`static/app.js`（765行の単一ファイル・innerHTML手書き）は `static/js/` 配下のESモジュールに分割した
+（ビルドステップ・フレームワークは導入せず、ブラウザネイティブの `<script type="module">` + 素の `import`）。
+
+- **状態は `state.js` に一本化**: SSE受信は `setState({ data, proposals })` を呼ぶだけ。各コンポーネントは
+  `subscribe()` されたrender関数で自分の担当DOM要素だけを再描画する
+- **各コンポーネントは自分のコンテナ外を触らない**（`components/*.js` の `render(state)`）。
+  過去に発生した「innerHTML上書きで無関係の子要素を破壊し、null参照からのTypeErrorがSSEのtry/catchで
+  silent failする」バグ（`feedback_js_innerhtml_silent_fail`）の再発を設計で防ぐ
+- **エラーは握りつぶさない**: `api.js` の `apiFetch()` が通信失敗・非2xxを検知すると必ず `statusBanner` に
+  到達させてから呼び出し元に返す/再スローする
+- 新しいUI機能を追加する際は `static/js/components/` に1ファイル追加し、`main.js` で `subscribe` に
+  登録する形式を踏襲すること
 
 ---
 

@@ -59,9 +59,9 @@ _NO_CACHE = {"Cache-Control": "no-cache"}
 async def service_worker():
     return FileResponse("static/sw.js", media_type="application/javascript", headers=_NO_CACHE)
 
-@app.get("/static/app.js")
-async def app_js():
-    return FileResponse("static/app.js", media_type="application/javascript", headers=_NO_CACHE)
+@app.get("/static/js/{filepath:path}")
+async def js_modules(filepath: str):
+    return FileResponse(f"static/js/{filepath}", media_type="application/javascript", headers=_NO_CACHE)
 
 @app.get("/static/style.css")
 async def style_css():
