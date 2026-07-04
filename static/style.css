@@ -80,6 +80,31 @@ body {
   display: none;
 }
 
+/* ===== COUNTDOWN BANNER ===== */
+/* Googleカレンダーで「★」を付けたイベントの「あと◯日」を大きく表示する。
+   子どもが毎日楽しみにできる掲示物として、他の警告バナーより目立つ配色にする。 */
+#countdown-banner {
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  background: linear-gradient(120deg, #ffd166 0%, #ff8fab 100%);
+  color: #3b3540;
+}
+
+#countdown-banner.hidden {
+  display: none;
+}
+
+.countdown-title {
+  font-weight: 700;
+}
+
+.countdown-days {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
 /* ===== HEADER ===== */
 #header {
   display: flex;

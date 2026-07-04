@@ -42,6 +42,21 @@ async def test_get_current_data_contains_mock_tasks(client):
 
 
 @pytest.mark.asyncio
+async def test_get_current_data_contains_countdown_events(client):
+    def _mock_countdown(*args, **kwargs):
+        return [{"title": "運動会", "event_date": "2026-10-01", "days_until": 10}]
+
+    with patch("app.services.google_calendar.fetch_countdown_events", _mock_countdown):
+        await refresh_data()
+        data = await get_current_data()
+
+    assert data is not None
+    assert len(data.countdown_events) == 1
+    assert data.countdown_events[0].title == "運動会"
+    assert data.countdown_events[0].days_until == 10
+
+
+@pytest.mark.asyncio
 async def test_week_endpoint_returns_seven_days(client):
     """/api/week は今日起点で7日分の構造を返す"""
     import app.routers.dashboard as dashboard_module

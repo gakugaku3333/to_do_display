@@ -8,12 +8,13 @@ import * as weather from './components/weather.js';
 import * as events from './components/events.js';
 import * as tasks from './components/tasks.js';
 import * as proposals from './components/proposals.js';
+import * as countdown from './components/countdown.js';
 import { initWeeklyTasks } from './components/weeklyTasks.js';
 import { initWeekModal } from './components/weekModal.js';
 
 // 各コンポーネントは自分の担当コンテナだけを再描画する（規約1）。
 // 状態が変わるたびに全コンポーネントへ通知し、各自が必要な部分だけ更新する。
-const renderers = [dateHeader.render, weather.render, events.render, tasks.render, proposals.render];
+const renderers = [dateHeader.render, weather.render, events.render, tasks.render, proposals.render, countdown.render];
 
 subscribe((state) => {
   for (const render of renderers) render(state);

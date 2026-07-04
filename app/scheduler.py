@@ -20,7 +20,7 @@ from app.database import (
     get_weather_cache,
     save_weather_cache,
 )
-from app.models import CalendarEvent, Task, TodayData, WeatherData, WEEKDAYS_JA
+from app.models import CalendarEvent, CountdownEvent, Task, TodayData, WeatherData, WEEKDAYS_JA
 from app.services import google_calendar, icloud_reminders
 from app.services import weather as weather_service
 
@@ -123,8 +123,11 @@ async def refresh_data():
     await cleanup_old_flow_completions(today_str)
 
     events: list[CalendarEvent] = []
+    countdown_events: list[CountdownEvent] = []
     try:
         events = await asyncio.to_thread(google_calendar.fetch_today_events, settings.timezone)
+        raw_countdowns = await asyncio.to_thread(google_calendar.fetch_countdown_events, settings.timezone)
+        countdown_events = [CountdownEvent(**c) for c in raw_countdowns]
         _mark_sync("calendar", ok=True)
     except Exception:
         logger.error("Google Calendar の取得に失敗しました", exc_info=True)
@@ -150,6 +153,7 @@ async def refresh_data():
         weather=_cached_weather,
         is_holiday=is_holiday,
         holiday_name=holiday_name,
+        countdown_events=countdown_events,
     )
     _last_refresh = now_local
     logger.info("データ更新完了: %s %s", today_str, weekday_ja)

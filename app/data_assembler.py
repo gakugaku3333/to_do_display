@@ -61,6 +61,7 @@ async def get_current_data() -> TodayData | None:
         is_holiday=data.is_holiday,
         holiday_name=data.holiday_name,
         trash_labels=trash_labels,
+        countdown_events=data.countdown_events,
     )
 
 

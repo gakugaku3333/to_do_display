@@ -245,3 +245,45 @@ def test_get_token_status_invalid_grant(tmp_path):
     assert status["configured"] is True
     assert status["valid"] is False
     assert status["error"] == "invalid_grant"
+
+
+def test_fetch_countdown_events_filters_by_prefix_and_sorts():
+    today = date.today()
+    soon = today + timedelta(days=5)
+    far = today + timedelta(days=30)
+    service = MagicMock()
+    service.calendarList().list().execute.return_value = {"items": [{"id": "primary@example.com"}]}
+    service.events().list().execute.return_value = {"items": [
+        {"id": "no-prefix", "summary": "普通の予定", "start": {"date": soon.isoformat()}},
+        {"id": "far-event", "summary": "★遠足", "start": {"date": far.isoformat()}},
+        {"id": "soon-event", "summary": "★運動会", "start": {"date": soon.isoformat()}},
+    ]}
+
+    with patch.object(google_calendar.settings, "excluded_calendar_ids", ""), \
+         patch.object(google_calendar.settings, "family_calendar_id", ""), \
+         patch.object(google_calendar, "build", return_value=service), \
+         patch.object(google_calendar, "get_credentials", lambda name: object() if name == "husband" else None):
+        results = google_calendar.fetch_countdown_events()
+
+    assert [r["title"] for r in results] == ["運動会", "遠足"]
+    assert results[0]["event_date"] == soon.isoformat()
+    assert results[0]["days_until"] == 5
+    assert results[1]["days_until"] == 30
+
+
+def test_fetch_countdown_events_excludes_past_events():
+    today = date.today()
+    past = today - timedelta(days=3)
+    service = MagicMock()
+    service.calendarList().list().execute.return_value = {"items": [{"id": "primary@example.com"}]}
+    service.events().list().execute.return_value = {"items": [
+        {"id": "past-event", "summary": "★過去の予定", "start": {"date": past.isoformat()}},
+    ]}
+
+    with patch.object(google_calendar.settings, "excluded_calendar_ids", ""), \
+         patch.object(google_calendar.settings, "family_calendar_id", ""), \
+         patch.object(google_calendar, "build", return_value=service), \
+         patch.object(google_calendar, "get_credentials", lambda name: object() if name == "husband" else None):
+        results = google_calendar.fetch_countdown_events()
+
+    assert results == []

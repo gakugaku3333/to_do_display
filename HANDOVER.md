@@ -13,6 +13,8 @@
 - **ダッシュボード専用の曜日タスク**（曜日指定の繰り返しタスク、フローに合流表示）
 - **ゴミ出しの日表示**（曜日タスクの `category="trash"` 指定。フローには合流させず、日付ヘッダーに
   🗑️バッジ表示 + 朝のブリーフィングで読み上げ）
+- **イベントカウントダウン**（Googleカレンダーのタイトルに「★」を付けると「あと◯日」を
+  ヘッダー直下に大きく表示。設定UIは無く命名規約で実現。例: `★運動会`）
 - **タスクのタップ完了**（フェードアウトでリストから消え、Reminders.appにも同期）
 - **久留米市の天気予報**（毎朝6:15取得、気象庁API）
 - **祝日・土曜日の日付カラー表示**（祝日/日曜→赤、土曜→青）
@@ -98,7 +100,7 @@ to_do_display/
 │   │   ├── api.js               # fetchラッパー（authHeaders集約、エラーは必ずstatusBannerへ）
 │   │   ├── utils.js             # escapeHtml・日付整形など
 │   │   └── components/          # clock/dateHeader/weather/events/tasks/proposals/
-│   │                            # weeklyTasks/weekModal/statusBanner/healthBanner
+│   │                            # weeklyTasks/weekModal/statusBanner/healthBanner/countdown
 │   ├── manifest.json            # PWAマニフェスト
 │   └── sw.js                    # Service Worker（オフラインキャッシュ）
 ├── tests/                       # pytest テストスイート

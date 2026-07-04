@@ -53,6 +53,12 @@ class WeatherData(BaseModel):
     hourly_precip: list[WeatherHour]
 
 
+class CountdownEvent(BaseModel):
+    title: str        # "★"接頭辞を除いたタイトル
+    event_date: str    # YYYY-MM-DD
+    days_until: int    # 0=今日, 1=明日, ...
+
+
 class WeekDay(BaseModel):
     date: str                       # YYYY-MM-DD
     weekday: str                    # 日本語曜日 (月曜日, ...)
@@ -79,3 +85,4 @@ class TodayData(BaseModel):
     is_holiday: bool = False        # 祝日・振替休日の場合 True
     holiday_name: str | None = None  # 祝日名（例: "元日", "春分の日"）
     trash_labels: list[str] = []    # 今日のゴミ出し種別（category="trash"の曜日タスク）
+    countdown_events: list[CountdownEvent] = []  # "★"接頭辞イベントのカウントダウン（近い順）

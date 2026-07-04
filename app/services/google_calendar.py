@@ -339,3 +339,58 @@ def fetch_week_events(tz_name: str = "Asia/Tokyo", days: int = 7) -> dict[str, l
     for events in grouped.values():
         events.sort(key=lambda e: (e.start_time is None, e.start_time or ""))
     return grouped
+
+
+COUNTDOWN_PREFIX = "★"
+
+
+def _event_start_date(event: dict, tz: ZoneInfo) -> date | None:
+    start = event.get("start", {})
+    if "dateTime" in start:
+        return datetime.fromisoformat(start["dateTime"]).astimezone(tz).date()
+    if "date" in start:
+        return date.fromisoformat(start["date"])
+    return None
+
+
+def fetch_countdown_events(
+    tz_name: str = "Asia/Tokyo", prefix: str = COUNTDOWN_PREFIX, days: int = 365,
+) -> list[dict]:
+    """タイトルが「★」等の接頭辞で始まる今後のイベントを日付の近い順に返す。
+
+    設定UIを作らず命名規約（例: "★運動会"）で実現する。カレンダーAPIのtimeMin/timeMaxは
+    範囲クエリ1回で済むため、daysを広く取ってもAPI呼び出し回数は増えない。
+    """
+    tz = ZoneInfo(tz_name)
+    today = date.today()
+    time_min, time_max = _day_bounds(tz, today, today + timedelta(days=days - 1))
+
+    jobs = _build_jobs()
+    seen_ids: set[str] = set()
+    results: list[dict] = []
+
+    if jobs:
+        with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
+            futures = [
+                executor.submit(_fetch_calendar_raw, creds, cal_id, time_min, time_max)
+                for creds, cal_id, _ in jobs
+            ]
+            for _, future in zip(jobs, futures):
+                for raw in future.result():
+                    title = raw.get("summary", "")
+                    if not title.startswith(prefix):
+                        continue
+                    if raw["id"] in seen_ids:
+                        continue
+                    event_date = _event_start_date(raw, tz)
+                    if event_date is None or event_date < today:
+                        continue
+                    seen_ids.add(raw["id"])
+                    results.append({
+                        "title": title[len(prefix):].strip(),
+                        "event_date": event_date.isoformat(),
+                        "days_until": (event_date - today).days,
+                    })
+
+    results.sort(key=lambda r: r["event_date"])
+    return results
