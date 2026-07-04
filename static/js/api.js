@@ -41,19 +41,19 @@ export async function fetchWeeklyTasks() {
   return res.ok ? res.json() : [];
 }
 
-export async function createWeeklyTask(title, weekdays) {
+export async function createWeeklyTask(title, weekdays, category = 'task') {
   return apiFetch('/api/weekly-tasks', {
     method: 'POST',
     headers: authHeaders(true),
-    body: JSON.stringify({ title, weekdays }),
+    body: JSON.stringify({ title, weekdays, category }),
   });
 }
 
-export async function updateWeeklyTask(taskId, title, weekdays) {
+export async function updateWeeklyTask(taskId, title, weekdays, category = 'task') {
   return apiFetch(`/api/weekly-tasks/${taskId}`, {
     method: 'PUT',
     headers: authHeaders(true),
-    body: JSON.stringify({ title, weekdays }),
+    body: JSON.stringify({ title, weekdays, category }),
   });
 }
 

@@ -47,6 +47,12 @@ def _weather_phrase(w: WeatherData | None) -> str:
     return "".join(parts)
 
 
+def _trash_phrase(data: TodayData) -> str | None:
+    if not data.trash_labels:
+        return None
+    return f"今日のゴミ出しは、{'、'.join(data.trash_labels)}です。"
+
+
 def _events_phrase(data: TodayData) -> str:
     events = data.events
     if not events:
@@ -104,9 +110,12 @@ def build_briefing_text(data: TodayData) -> str:
         "おはようございます。",
         _date_phrase(data),
         _weather_phrase(data.weather),
-        _events_phrase(data),
-        _tasks_phrase(data),
     ]
+    trash = _trash_phrase(data)
+    if trash:
+        parts.append(trash)
+    parts.append(_events_phrase(data))
+    parts.append(_tasks_phrase(data))
     auth_warning = _auth_warning_phrase()
     if auth_warning:
         parts.append(auth_warning)

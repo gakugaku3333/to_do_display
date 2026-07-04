@@ -78,3 +78,4 @@ class TodayData(BaseModel):
     weather: WeatherData | None = None
     is_holiday: bool = False        # 祝日・振替休日の場合 True
     holiday_name: str | None = None  # 祝日名（例: "元日", "春分の日"）
+    trash_labels: list[str] = []    # 今日のゴミ出し種別（category="trash"の曜日タスク）

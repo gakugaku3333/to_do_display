@@ -18,11 +18,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 WEEKDAY_RANGE = set(range(7))  # 0=月 〜 6=日
+VALID_CATEGORIES = {"task", "trash"}
 
 
 class WeeklyTaskBody(BaseModel):
     title: str
     weekdays: list[int]  # 0=月, 1=火, 2=水, 3=木, 4=金, 5=土, 6=日
+    category: str = "task"  # "task"（通常のやる事） or "trash"（ゴミ出し。日付ヘッダーにバッジ表示）
 
 
 def _validate(body: WeeklyTaskBody) -> None:
@@ -32,6 +34,8 @@ def _validate(body: WeeklyTaskBody) -> None:
         raise HTTPException(status_code=400, detail="曜日を1つ以上選択してください")
     if not set(body.weekdays).issubset(WEEKDAY_RANGE):
         raise HTTPException(status_code=400, detail="曜日の値は0〜6で指定してください")
+    if body.category not in VALID_CATEGORIES:
+        raise HTTPException(status_code=400, detail="categoryは task か trash を指定してください")
 
 
 @router.get("/api/weekly-tasks", dependencies=[Depends(verify_token)])
@@ -43,16 +47,16 @@ async def list_weekly_tasks():
 @router.post("/api/weekly-tasks", dependencies=[Depends(verify_token)])
 async def create_task(body: WeeklyTaskBody):
     _validate(body)
-    task_id = await create_weekly_task(body.title.strip(), body.weekdays)
+    task_id = await create_weekly_task(body.title.strip(), body.weekdays, body.category)
     await broadcast_current_data()
-    logger.info("曜日タスク作成: %s %s", body.title, body.weekdays)
+    logger.info("曜日タスク作成: %s %s (category=%s)", body.title, body.weekdays, body.category)
     return {"id": task_id}
 
 
 @router.put("/api/weekly-tasks/{task_id}", dependencies=[Depends(verify_token)])
 async def update_task(task_id: str, body: WeeklyTaskBody):
     _validate(body)
-    ok = await update_weekly_task(task_id, body.title.strip(), body.weekdays)
+    ok = await update_weekly_task(task_id, body.title.strip(), body.weekdays, body.category)
     if not ok:
         raise HTTPException(status_code=404, detail="タスクが見つかりません")
     await broadcast_current_data()

@@ -11,6 +11,8 @@
 - 夫婦のGoogleカレンダー予定を色分け表示（夫: 青、妻: ピンク、ファミリー: 緑）
 - iCloudリマインダーを「ストック（期限ベース）」「フロー（当日のみ）」の2カテゴリで表示
 - **ダッシュボード専用の曜日タスク**（曜日指定の繰り返しタスク、フローに合流表示）
+- **ゴミ出しの日表示**（曜日タスクの `category="trash"` 指定。フローには合流させず、日付ヘッダーに
+  🗑️バッジ表示 + 朝のブリーフィングで読み上げ）
 - **タスクのタップ完了**（フェードアウトでリストから消え、Reminders.appにも同期）
 - **久留米市の天気予報**（毎朝6:15取得、気象庁API）
 - **祝日・土曜日の日付カラー表示**（祝日/日曜→赤、土曜→青）
@@ -311,7 +313,8 @@ CREATE TABLE IF NOT EXISTS weekly_tasks (
     title      TEXT NOT NULL,
     weekdays   TEXT NOT NULL DEFAULT '',  -- JSON配列: [0,1,4] (0=月〜6=日)
     sort_order INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    category   TEXT NOT NULL DEFAULT 'task'  -- "task"(通常) or "trash"(ゴミ出し)
 );
 ```
 
@@ -319,6 +322,8 @@ CREATE TABLE IF NOT EXISTS weekly_tasks (
 - **ストックタスク**: 完了状態は永続
 - **フロータスク**: 日付変更時に `cleanup_old_flow_completions()` で自動削除
 - **曜日タスク**: 当日日付を `due_date` として記録、翌日リセット
+- **`category` 列は init_db() 内で既存DBにも自動マイグレーション**（`PRAGMA table_info` で存在確認後
+  `ALTER TABLE` を実行。`CREATE TABLE IF NOT EXISTS` だけでは既存テーブルに列は追加されないため）
 
 ### タスク完了APIの重要な設計
 

@@ -52,8 +52,9 @@ function renderTaskList(tasks) {
 
     const display = document.createElement('div');
     display.className = 'weekly-task-display';
+    const trashBadge = task.category === 'trash' ? '<span class="trash-badge">🗑️ ゴミ出し</span>' : '';
     display.innerHTML = `
-      <span class="weekly-task-title">${escapeHtml(task.title)}</span>
+      <span class="weekly-task-title">${escapeHtml(task.title)}${trashBadge}</span>
       <div class="weekly-task-days">${renderDayChips(task.weekdays)}</div>
       <div class="weekly-task-actions">
         <button class="weekly-btn edit-btn">✏</button>
@@ -64,9 +65,14 @@ function renderTaskList(tasks) {
     editForm.className = 'weekly-task-edit';
     editForm.style.display = 'none';
     const editSelectorId = `edit-days-${task.id}`;
+    const editTrashId = `edit-trash-${task.id}`;
     editForm.innerHTML = `
       <input type="text" class="edit-title-input" value="${escapeHtml(task.title)}" maxlength="50">
       <div id="${editSelectorId}" class="day-selector"></div>
+      <label class="weekly-edit-trash-label">
+        <input type="checkbox" id="${editTrashId}" ${task.category === 'trash' ? 'checked' : ''}>
+        🗑️ ゴミ出し
+      </label>
       <div class="weekly-edit-actions">
         <button class="weekly-cancel-btn">キャンセル</button>
         <button class="weekly-save-btn">保存</button>
@@ -93,7 +99,8 @@ function renderTaskList(tasks) {
       const title = editForm.querySelector('.edit-title-input').value.trim();
       const days = getSelectedDays(editSelectorId);
       if (!title || days.length === 0) return;
-      const res = await updateWeeklyTask(task.id, title, days);
+      const category = document.getElementById(editTrashId).checked ? 'trash' : 'task';
+      const res = await updateWeeklyTask(task.id, title, days, category);
       if (res.ok) await refreshList();
     });
 
@@ -136,10 +143,13 @@ export function initWeeklyTasks() {
       flashStatus('タスク名と曜日を入力してください', 'warning', 2000);
       return;
     }
-    const res = await createWeeklyTask(title, days);
+    const trashCheckbox = document.getElementById('weekly-add-trash');
+    const category = trashCheckbox.checked ? 'trash' : 'task';
+    const res = await createWeeklyTask(title, days, category);
     if (res.ok) {
       addTitleInput.value = '';
       addBtn.disabled = true;
+      trashCheckbox.checked = false;
       buildDaySelector('weekly-add-days');
       await refreshList();
     }

@@ -29,8 +29,14 @@ async def get_current_data() -> TodayData | None:
     updated_stock = [t for t in data.stock_tasks if t.id not in completed_ids]
     updated_flow = [t for t in data.flow_tasks if t.id not in completed_ids]
 
-    # 曜日タスクをフローに合流（完了済みは除外）
+    # 曜日タスクをフローに合流（完了済みは除外）。ゴミ出し種別(category="trash")は
+    # チェック対象のタスクではなく日付ヘッダーの案内バッジとして表示するため、
+    # フローリストには含めず trash_labels に分離する。
+    trash_labels: list[str] = []
     for wt in weekly_raw:
+        if wt.get("category") == "trash":
+            trash_labels.append(wt["title"])
+            continue
         task_id = f"weekly_{wt['id']}"
         if task_id not in completed_ids:
             updated_flow.append(Task(
@@ -54,6 +60,7 @@ async def get_current_data() -> TodayData | None:
         weather=data.weather,
         is_holiday=data.is_holiday,
         holiday_name=data.holiday_name,
+        trash_labels=trash_labels,
     )
 
 

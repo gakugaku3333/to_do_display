@@ -140,6 +140,18 @@ body {
   vertical-align: middle;
 }
 
+.trash-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  background: rgba(47, 128, 237, 0.15);
+  color: var(--accent-sky);
+  border: 1px solid rgba(47, 128, 237, 0.35);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  vertical-align: middle;
+}
+
 #last-refresh {
   position: absolute;
   bottom: 4px;
@@ -882,6 +894,15 @@ body {
 #weekly-add-title::placeholder {
   color: var(--text-secondary);
   opacity: 0.6;
+}
+
+#weekly-add-trash-label,
+.weekly-edit-trash-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
 }
 
 #weekly-add-title:focus {

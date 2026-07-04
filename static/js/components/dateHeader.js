@@ -1,4 +1,4 @@
-import { dateColorClass } from '../utils.js';
+import { dateColorClass, escapeHtml } from '../utils.js';
 
 // render(state): #date-info と #last-refresh のみを触る。
 export function render(state) {
@@ -19,7 +19,11 @@ export function render(state) {
     ? `<span class="holiday-badge">${data.holiday_name}</span>`
     : '';
 
-  dateEl.innerHTML = `<span class="date-main ${dayClass}">${year}年${month}月${day}日（${data.weekday.replace('曜日', '')}）${holidayBadge}</span>`;
+  const trashBadges = (data.trash_labels || [])
+    .map((label) => `<span class="trash-badge">🗑️ ${escapeHtml(label)}</span>`)
+    .join('');
+
+  dateEl.innerHTML = `<span class="date-main ${dayClass}">${year}年${month}月${day}日（${data.weekday.replace('曜日', '')}）${holidayBadge}${trashBadges}</span>`;
 
   const refreshEl = document.getElementById('last-refresh');
   if (refreshEl) refreshEl.textContent = refreshText;

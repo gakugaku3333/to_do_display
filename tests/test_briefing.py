@@ -76,6 +76,31 @@ def test_build_briefing_text_weekday_tasks_separate():
     assert "曜日ごとのやることは、燃えるゴミ出し、以上です。" in text
 
 
+def test_build_briefing_text_includes_trash_labels():
+    data = TodayData(
+        date="2026-06-16",
+        weekday="火曜日",
+        events=[],
+        stock_tasks=[],
+        flow_tasks=[],
+        trash_labels=["燃えるゴミ"],
+    )
+    text = build_briefing_text(data)
+    assert "今日のゴミ出しは、燃えるゴミです。" in text
+
+
+def test_build_briefing_text_no_trash_labels_omits_phrase():
+    data = TodayData(
+        date="2026-06-16",
+        weekday="火曜日",
+        events=[],
+        stock_tasks=[],
+        flow_tasks=[],
+    )
+    text = build_briefing_text(data)
+    assert "ゴミ出し" not in text
+
+
 def test_build_briefing_text_holiday():
     data = TodayData(
         date="2026-01-01",

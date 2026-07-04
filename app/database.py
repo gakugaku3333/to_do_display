@@ -67,9 +67,15 @@ async def init_db():
                 title TEXT NOT NULL,
                 weekdays TEXT NOT NULL DEFAULT '',
                 sort_order INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'task'
             )
         """)
+        # 既存DBへのマイグレーション（CREATE TABLE IF NOT EXISTSは既存テーブルに列を足さないため）
+        async with db.execute("PRAGMA table_info(weekly_tasks)") as cursor:
+            columns = {row[1] for row in await cursor.fetchall()}
+        if "category" not in columns:
+            await db.execute("ALTER TABLE weekly_tasks ADD COLUMN category TEXT NOT NULL DEFAULT 'task'")
         # 天気を日付ごとにキャッシュ。前日比の算出（前日の気温参照）と
         # 再起動後の復元（当日分があれば API を叩かない）に使う。
         await db.execute("""
@@ -270,7 +276,7 @@ async def get_all_weekly_tasks() -> list[dict]:
     try:
         db = await get_connection()
         async with db.execute(
-            "SELECT id, title, weekdays, sort_order FROM weekly_tasks ORDER BY sort_order, created_at"
+            "SELECT id, title, weekdays, sort_order, category FROM weekly_tasks ORDER BY sort_order, created_at"
         ) as cursor:
             rows = await cursor.fetchall()
             tasks = _rows_to_dicts(cursor, rows)
@@ -288,15 +294,16 @@ async def get_weekly_tasks_for_weekday(weekday: int) -> list[dict]:
     return [t for t in all_tasks if weekday in t["weekdays"]]
 
 
-async def create_weekly_task(title: str, weekdays: list[int]) -> str:
+async def create_weekly_task(title: str, weekdays: list[int], category: str = "task") -> str:
     task_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     weekdays_str = ",".join(str(w) for w in sorted(weekdays))
     try:
         db = await get_connection()
         await db.execute(
-            "INSERT INTO weekly_tasks (id, title, weekdays, sort_order, created_at) VALUES (?, ?, ?, 0, ?)",
-            (task_id, title, weekdays_str, now),
+            "INSERT INTO weekly_tasks (id, title, weekdays, sort_order, created_at, category) "
+            "VALUES (?, ?, ?, 0, ?, ?)",
+            (task_id, title, weekdays_str, now, category),
         )
         await db.commit()
     except Exception:
@@ -305,13 +312,13 @@ async def create_weekly_task(title: str, weekdays: list[int]) -> str:
     return task_id
 
 
-async def update_weekly_task(task_id: str, title: str, weekdays: list[int]) -> bool:
+async def update_weekly_task(task_id: str, title: str, weekdays: list[int], category: str = "task") -> bool:
     weekdays_str = ",".join(str(w) for w in sorted(weekdays))
     try:
         db = await get_connection()
         await db.execute(
-            "UPDATE weekly_tasks SET title = ?, weekdays = ? WHERE id = ?",
-            (title, weekdays_str, task_id),
+            "UPDATE weekly_tasks SET title = ?, weekdays = ?, category = ? WHERE id = ?",
+            (title, weekdays_str, category, task_id),
         )
         affected = db.total_changes
         await db.commit()
