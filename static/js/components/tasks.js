@@ -1,5 +1,6 @@
 import { setTaskCompleted } from '../api.js';
 import { flashStatus } from './statusBanner.js';
+import { celebrate } from './celebrate.js';
 
 function formatDueDate(dueDateStr, isOverdue) {
   if (!dueDateStr) return '';
@@ -81,6 +82,10 @@ async function handleTaskTap(el, task) {
   const isCompleted = el.classList.contains('completed');
   // 楽観的 UI 更新
   el.classList.toggle('completed', !isCompleted);
+  // 曜日タスクの完了だけ演出する（ストック/フローは対象外。深追いしない）
+  if (!isCompleted && task.task_type === 'weekly') {
+    celebrate(el);
+  }
 
   try {
     await setTaskCompleted(task, !isCompleted, controller.signal);

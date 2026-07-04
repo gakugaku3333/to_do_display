@@ -681,6 +681,31 @@ body {
   animation: fadeIn 0.2s ease forwards;
 }
 
+/* ===== CONFETTI (曜日タスク完了演出) ===== */
+@keyframes confettiBurst {
+  from { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  to   { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(360deg); }
+}
+
+.confetti-piece {
+  position: fixed;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 2000;
+  animation: confettiBurst 0.7s ease-out forwards;
+}
+
+/* ===== 曜日タスク完了率(★)・効果音トグル ===== */
+#weekly-progress {
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  color: #f5a623;
+  padding-right: 4px;
+  flex-shrink: 0;
+}
+
 /* ===== WEEKLY TASK SETTINGS MODAL ===== */
 #weekly-overlay {
   position: fixed;

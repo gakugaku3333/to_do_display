@@ -32,13 +32,19 @@ async def get_current_data() -> TodayData | None:
     # 曜日タスクをフローに合流（完了済みは除外）。ゴミ出し種別(category="trash")は
     # チェック対象のタスクではなく日付ヘッダーの案内バッジとして表示するため、
     # フローリストには含めず trash_labels に分離する。
+    # weekly_completed/total は「今日のチェック対象曜日タスク」の完了率（★表示用）。
     trash_labels: list[str] = []
+    weekly_total = 0
+    weekly_completed = 0
     for wt in weekly_raw:
         if wt.get("category") == "trash":
             trash_labels.append(wt["title"])
             continue
+        weekly_total += 1
         task_id = f"weekly_{wt['id']}"
-        if task_id not in completed_ids:
+        if task_id in completed_ids:
+            weekly_completed += 1
+        else:
             updated_flow.append(Task(
                 id=task_id,
                 title=wt["title"],
@@ -62,6 +68,8 @@ async def get_current_data() -> TodayData | None:
         holiday_name=data.holiday_name,
         trash_labels=trash_labels,
         countdown_events=data.countdown_events,
+        weekly_completed=weekly_completed,
+        weekly_total=weekly_total,
     )
 
 

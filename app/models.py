@@ -86,3 +86,5 @@ class TodayData(BaseModel):
     holiday_name: str | None = None  # 祝日名（例: "元日", "春分の日"）
     trash_labels: list[str] = []    # 今日のゴミ出し種別（category="trash"の曜日タスク）
     countdown_events: list[CountdownEvent] = []  # "★"接頭辞イベントのカウントダウン（近い順）
+    weekly_completed: int = 0       # 今日のチェック対象曜日タスクのうち完了済み件数
+    weekly_total: int = 0           # 今日のチェック対象曜日タスク総数（category="trash"は含まない）

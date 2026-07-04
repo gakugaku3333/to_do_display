@@ -9,12 +9,17 @@ import * as events from './components/events.js';
 import * as tasks from './components/tasks.js';
 import * as proposals from './components/proposals.js';
 import * as countdown from './components/countdown.js';
+import * as weeklyProgress from './components/weeklyProgress.js';
 import { initWeeklyTasks } from './components/weeklyTasks.js';
 import { initWeekModal } from './components/weekModal.js';
+import { initSoundToggle } from './components/celebrate.js';
 
 // 各コンポーネントは自分の担当コンテナだけを再描画する（規約1）。
 // 状態が変わるたびに全コンポーネントへ通知し、各自が必要な部分だけ更新する。
-const renderers = [dateHeader.render, weather.render, events.render, tasks.render, proposals.render, countdown.render];
+const renderers = [
+  dateHeader.render, weather.render, events.render, tasks.render,
+  proposals.render, countdown.render, weeklyProgress.render,
+];
 
 subscribe((state) => {
   for (const render of renderers) render(state);
@@ -26,6 +31,7 @@ tasks.initTasks();
 proposals.initProposals();
 initWeeklyTasks();
 initWeekModal();
+initSoundToggle();
 
 // ===== SSE接続 =====
 let eventSource = null;

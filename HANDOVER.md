@@ -15,6 +15,9 @@
   🗑️バッジ表示 + 朝のブリーフィングで読み上げ）
 - **イベントカウントダウン**（Googleカレンダーのタイトルに「★」を付けると「あと◯日」を
   ヘッダー直下に大きく表示。設定UIは無く命名規約で実現。例: `★運動会`）
+- **曜日タスク完了演出**（紙吹雪 + 効果音。効果音は🔊ボタンでON/OFF、localStorageに保存）
+- **曜日タスクの完了率を★で表示**（「今日のやる事リスト」ヘッダーに `weekly_completed/weekly_total` を反映。
+  ゴミ出し(category="trash")は完了率の対象外）
 - **タスクのタップ完了**（フェードアウトでリストから消え、Reminders.appにも同期）
 - **久留米市の天気予報**（毎朝6:15取得、気象庁API）
 - **祝日・土曜日の日付カラー表示**（祝日/日曜→赤、土曜→青）
@@ -100,7 +103,8 @@ to_do_display/
 │   │   ├── api.js               # fetchラッパー（authHeaders集約、エラーは必ずstatusBannerへ）
 │   │   ├── utils.js             # escapeHtml・日付整形など
 │   │   └── components/          # clock/dateHeader/weather/events/tasks/proposals/
-│   │                            # weeklyTasks/weekModal/statusBanner/healthBanner/countdown
+│   │                            # weeklyTasks/weekModal/statusBanner/healthBanner/countdown/
+│   │                            # weeklyProgress/celebrate
 │   ├── manifest.json            # PWAマニフェスト
 │   └── sw.js                    # Service Worker（オフラインキャッシュ）
 ├── tests/                       # pytest テストスイート
