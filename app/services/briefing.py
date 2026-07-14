@@ -10,6 +10,19 @@ from datetime import date
 
 from app.models import TodayData, WeatherData
 
+# iOSが誤読する名前をひらがなに置換（読み上げ専用）
+_NAME_READING: dict[str, str] = {
+    "紗奈": "さな",
+    "和花": "のどか",
+    "舞": "まい",
+    "上靴": "うわぐつ",
+}
+
+def _normalize_for_tts(text: str) -> str:
+    for kanji, reading in _NAME_READING.items():
+        text = text.replace(kanji, reading)
+    return text
+
 
 def _date_phrase(data: TodayData) -> str:
     """「6月16日、月曜日です」。祝日なら祝日名も添える。"""
@@ -85,4 +98,4 @@ def build_briefing_text(data: TodayData) -> str:
         _tasks_phrase(data),
         "今日も良い一日を。",
     ]
-    return "\n".join(parts)
+    return _normalize_for_tts("\n".join(parts))
