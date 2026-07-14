@@ -3,13 +3,13 @@ import logging
 import time
 from datetime import date
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 
 from app.auth import verify_token
 from app.data_assembler import get_current_data, get_empty_data, get_week_data
 from app.models import WeekData
-from app.services.briefing import build_briefing_text
+from app.services.briefing import build_briefing_text, synthesize_briefing_audio
 from app.sse import sse_manager
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,23 @@ async def briefing() -> PlainTextResponse:
     if data is None:
         data = get_empty_data()
     return PlainTextResponse(build_briefing_text(data), headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/api/briefing/audio", dependencies=[Depends(verify_token)])
+async def briefing_audio() -> Response:
+    """朝の音声ブリーフィングをmp3で返す。
+
+    タブレットにはTTSエンジンが無いため、サーバー（Mac）側のsayコマンドで
+    音声合成した結果を配信し、ブラウザは<audio>で再生するだけにする。
+
+    起動直後などバックグラウンドのデータ取得が未完了（get_current_dataがNone）の
+    場合は、空のブリーフィングを読み上げてしまわないよう503を返す。
+    """
+    data = await get_current_data()
+    if data is None:
+        raise HTTPException(status_code=503, detail="データ取得が未完了です")
+    audio = await synthesize_briefing_audio(build_briefing_text(data))
+    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/api/stream", dependencies=[Depends(verify_token)])

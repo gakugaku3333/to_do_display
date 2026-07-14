@@ -770,5 +770,31 @@ setInterval(() => {
   window.location.reload();
 }, 60 * 1000); // 1分ごとに時刻チェック
 
+// ===== 音声ブリーフィング（手動のみ）=====
+// タブレットにTTSエンジンが無いため、サーバー側で合成済みのmp3を取得して再生する。
+function playBriefing() {
+  const url = API_TOKEN ? `/api/briefing/audio?token=${encodeURIComponent(API_TOKEN)}` : '/api/briefing/audio';
+  return fetch(url)
+    .then((res) => {
+      if (!res.ok) throw new Error(`briefing audio not ready (${res.status})`);
+      return res.blob();
+    })
+    .then((blob) => new Promise((resolve, reject) => {
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.addEventListener('ended', resolve);
+      audio.addEventListener('error', reject);
+      audio.play().catch(reject);
+    }));
+}
+
+// 手動読み上げボタン（生成中は連打防止で無効化）
+const briefingBtn = document.getElementById('briefing-play-btn');
+briefingBtn?.addEventListener('click', () => {
+  briefingBtn.disabled = true;
+  playBriefing()
+    .catch((err) => console.warn('briefing audio playback failed', err))
+    .finally(() => { briefingBtn.disabled = false; });
+});
+
 // ===== 初期化 =====
 connectSSE();
