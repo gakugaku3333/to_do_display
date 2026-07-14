@@ -19,6 +19,7 @@ from app.database import (
 from app.models import CalendarEvent, Task, TodayData, WeatherData, WEEKDAYS_JA
 from app.services import google_calendar, icloud_reminders
 from app.services import weather as weather_service
+from app.services.briefing import get_briefing_audio
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,23 @@ def get_cached_data() -> TodayData | None:
     return _cached_data
 
 
+async def prewarm_briefing_audio():
+    """毎朝6:30に音声ブリーフィングを事前生成し、キャッシュしておく。
+
+    タブレットの🔊ボタンを押した瞬間に合成待ち（数秒）が発生しないようにする
+    ための事前ウォームアップ。失敗しても手動ボタン側でその場合成にフォールバック
+    するため、ここでは例外を握りつぶしてログのみ残す。
+    """
+    if _cached_data is None:
+        logger.warning("音声ブリーフィング事前生成: データ未取得のためスキップ")
+        return
+    try:
+        await get_briefing_audio(_cached_data)
+        logger.info("音声ブリーフィングを事前生成しました: %s", _cached_data.date)
+    except Exception:
+        logger.error("音声ブリーフィングの事前生成に失敗しました", exc_info=True)
+
+
 def get_last_refresh() -> datetime | None:
     return _last_refresh
 
@@ -141,6 +159,12 @@ def start_scheduler():
         hour=6, minute=0, timezone=settings.timezone,
         kwargs={"force": True},
         id="refresh_weather", max_instances=1, coalesce=True,
+    )
+    # 毎朝6:30に音声ブリーフィングを事前生成（タブレットの🔊ボタン押下を高速化）
+    _scheduler.add_job(
+        prewarm_briefing_audio, "cron",
+        hour=6, minute=30, timezone=settings.timezone,
+        id="prewarm_briefing_audio", max_instances=1, coalesce=True,
     )
     _scheduler.start()
 
