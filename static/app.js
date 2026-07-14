@@ -731,10 +731,19 @@ function manageWakeLock() {
   }
 }
 
+let hiddenAt = null;
+const SLEEP_RELOAD_MS = 30 * 1000; // 30秒以上のスリープで復帰時にリロード
+
 document.addEventListener('visibilitychange', () => {
   manageWakeLock();
-  if (document.visibilityState === 'visible') {
-    // SSE接続が切れていたら再接続
+  if (document.visibilityState === 'hidden') {
+    hiddenAt = Date.now();
+  } else if (document.visibilityState === 'visible') {
+    if (hiddenAt && Date.now() - hiddenAt >= SLEEP_RELOAD_MS) {
+      window.location.reload();
+      return;
+    }
+    // 短い非表示からの復帰はSSE再接続のみ
     if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
       connectSSE();
     }
