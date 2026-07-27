@@ -323,7 +323,6 @@ function renderWeather(weather) {
 
 // ===== 統合描画 =====
 function renderAll(data) {
-  todayIsHoliday = !!data.is_holiday;  // スリープ判定（平日昼OFF）の祝日除外に使う
   updateDateDisplay(data);
   renderWeather(data.weather || null);
   renderEvents(data.events);
@@ -690,20 +689,11 @@ function connectSSE() {
 // ===== Screen Wake Lock (タブレットのスリープ防止) =====
 // 画面をOFFにすべき時間帯は Wake Lock を解放する（Mac側のADBスケジュールで画面を
 // スリープさせるため、ここで起こし続けると喧嘩する）。スケジュールはMac側と一致:
-//   共通          : 21:30–06:00 はOFF
-//   平日(月–金・非祝日): さらに 08:00–15:00 もOFF
-//   土日・祝日     : 夜間のみOFF
-// 祝日判定は SSE データの is_holiday を使う（renderAll で更新）。
-let todayIsHoliday = false;
-
+//   06:00–08:00 のみON、それ以外は終日OFF
 function shouldScreenBeOff() {
   const n = new Date();
-  const hm = n.getHours() * 100 + n.getMinutes(); // 例 21:30 → 2130
-  if (hm >= 2130 || hm < 600) return true;        // 夜間（共通）
-  const dow = n.getDay();                          // 0=日..6=土
-  const isWeekday = dow >= 1 && dow <= 5;
-  if (isWeekday && !todayIsHoliday && hm >= 800 && hm < 1500) return true; // 平日の日中
-  return false;
+  const hm = n.getHours() * 100 + n.getMinutes(); // 例 07:30 → 730
+  return !(hm >= 600 && hm < 800);
 }
 
 let wakeLockSentinel = null;
