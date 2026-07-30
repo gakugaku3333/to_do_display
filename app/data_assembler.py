@@ -54,6 +54,7 @@ async def get_current_data() -> TodayData | None:
         weather=data.weather,
         is_holiday=data.is_holiday,
         holiday_name=data.holiday_name,
+        calendar_auth_expired=google_calendar.has_expired_account(),
     )
 
 

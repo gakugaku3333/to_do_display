@@ -321,6 +321,14 @@ function renderWeather(weather) {
   }
 }
 
+// Google認証が失効している間だけ、予定パネルに警告バッジを出す。
+// 接続状態を表す #status-banner とは別枠にして、SSE 受信のたびに消されないようにする。
+function renderCalendarAuthWarning(expired) {
+  const el = document.getElementById('calendar-auth-warning');
+  if (!el) return;
+  el.className = expired ? 'auth-warning' : 'hidden';
+}
+
 // ===== 統合描画 =====
 function renderAll(data) {
   updateDateDisplay(data);
@@ -329,6 +337,7 @@ function renderAll(data) {
   renderTasks(data.stock_tasks, 'stock-list');
   renderTasks(data.flow_tasks, 'flow-list');
   document.getElementById('flow-title').textContent = '🔄 今日のやる事リスト';
+  renderCalendarAuthWarning(data.calendar_auth_expired === true);
   syncProposals(data.proposals || []);
 }
 
