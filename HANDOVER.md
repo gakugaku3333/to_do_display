@@ -30,6 +30,8 @@ Android タブレット (ブラウザ / PWA)
         │
         ├── SSE:  GET  /api/stream              → リアルタイムデータ配信
         ├── REST: GET  /api/briefing            → 朝の音声ブリーフィング読み上げテキスト（平文）
+        ├── REST: POST /api/briefing/speak      → ブリーフィングを Google Home で今すぐ再生
+        ├── REST: GET  /api/briefing/audio/{nonce}.wav → Google Home が取得する音声（nonce で保護）
         ├── REST: POST /api/tasks/complete       → タスク完了（IDはボディで送る）
         ├── REST: POST /api/tasks/uncomplete     → 完了取消
         ├── REST: GET  /api/weekly-tasks         → 曜日タスク一覧
@@ -345,6 +347,7 @@ python -m pytest tests/ -v
 | リマインダーがタイムアウトし続ける | Reminders.app が固まっている。`killall Reminders && open -a Reminders` で再起動 |
 | コード修正しても画面が変わらない | Service Worker キャッシュ。**2回リロード**（1回目:新SW起動、2回目:新JS反映）。確実には Safari > 開発 > キャッシュを空にする |
 | Mac再起動後にサービスが起動しない | `launchctl list \| grep family` で確認。plist が `~/Library/LaunchAgents/` にあるか確認 |
+| Google Home で再生されない | `GOOGLE_HOME_NAME` が Google Home アプリの表示名と完全一致しているか、Mac mini とスピーカーが同じLAN（同じSSID・VLAN）にいるか確認。`curl -X POST localhost:8080/api/briefing/speak` のエラー文で原因が分かる |
 | タブレットからアクセスできない | MacのIPアドレス確認（`ipconfig getifaddr en0`）+ ファイアウォールでport 8080を許可 |
 
 ---

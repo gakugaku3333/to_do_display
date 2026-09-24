@@ -3,12 +3,13 @@ import logging
 import time
 from datetime import date
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 
 from app.auth import verify_token
 from app.data_assembler import get_current_data, get_empty_data, get_week_data
 from app.models import WeekData
+from app.services import speaker
 from app.services.briefing import build_briefing_text
 from app.sse import sse_manager
 
@@ -46,6 +47,37 @@ async def briefing() -> PlainTextResponse:
     if data is None:
         data = get_empty_data()
     return PlainTextResponse(build_briefing_text(data), headers={"Cache-Control": "no-cache"})
+
+
+@router.post("/api/briefing/speak", dependencies=[Depends(verify_token)])
+async def briefing_speak() -> dict:
+    """ブリーフィングを今すぐ Google Home で再生する（手動・ショートカット用）。"""
+    try:
+        await speak_briefing()
+    except Exception as e:
+        logger.error("Google Home での再生に失敗しました", exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"status": "ok"}
+
+
+@router.get("/api/briefing/audio/{nonce}.wav")
+async def briefing_audio(nonce: str) -> FileResponse:
+    """Google Home が取りに来る音声ファイル。
+
+    Cast デバイスは認証ヘッダーを付けられないため、トークンの代わりに
+    生成ごとに変わる推測不能な nonce を URL に含めて保護する。
+    """
+    path = speaker.get_audio_path(nonce)
+    if path is None:
+        raise HTTPException(status_code=404)
+    return FileResponse(path, media_type="audio/wav")
+
+
+async def speak_briefing() -> None:
+    data = await get_current_data()
+    if data is None:
+        data = get_empty_data()
+    await asyncio.to_thread(speaker.speak, build_briefing_text(data))
 
 
 @router.get("/api/stream", dependencies=[Depends(verify_token)])

@@ -130,6 +130,16 @@ def get_last_refresh() -> datetime | None:
     return _last_refresh
 
 
+async def _cast_briefing():
+    """毎朝 Google Home でブリーフィングを再生する。直前に最新データへ更新する。"""
+    from app.routers.dashboard import speak_briefing  # 循環 import 回避
+    try:
+        await refresh_data()
+        await speak_briefing()
+    except Exception:
+        logger.error("朝のブリーフィング再生に失敗しました", exc_info=True)
+
+
 def start_scheduler():
     _scheduler.add_job(
         refresh_data, "interval", minutes=5,
@@ -142,6 +152,13 @@ def start_scheduler():
         kwargs={"force": True},
         id="refresh_weather", max_instances=1, coalesce=True,
     )
+    if settings.google_home_name and settings.briefing_cast_time:
+        hour, minute = (int(x) for x in settings.briefing_cast_time.split(":"))
+        _scheduler.add_job(
+            _cast_briefing, "cron",
+            hour=hour, minute=minute, timezone=settings.timezone,
+            id="cast_briefing", max_instances=1, coalesce=True,
+        )
     _scheduler.start()
 
 
