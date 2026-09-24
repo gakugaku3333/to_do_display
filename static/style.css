@@ -298,6 +298,24 @@ body {
   opacity: 1;
 }
 
+/* Google認証の失効警告。予定パネルのヘッダーに常時出したままにする
+   （SSE 再接続で消える #status-banner とは別枠） */
+#calendar-auth-warning {
+  flex-shrink: 0;
+  background: #d29922;
+  color: #000;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+#calendar-auth-warning.hidden {
+  display: none;
+}
+
 .item-list {
   flex: 1;
   overflow-y: auto;

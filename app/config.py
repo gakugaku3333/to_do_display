@@ -27,8 +27,6 @@ class Settings(BaseSettings):
     google_home_name: str = ""
     # 毎朝の自動再生時刻 "HH:MM"。空欄なら自動再生しない
     briefing_cast_time: str = ""
-    # macOS `say` の音声名（日本語: Kyoko / Otoya など）
-    tts_voice: str = "Kyoko"
     # 再生時の音量 0.0〜1.0。負値なら変更しない
     google_home_volume: float = -1.0
     # Google Home から見た本サーバーのURL。空欄なら LAN IP を自動検出

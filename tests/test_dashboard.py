@@ -62,3 +62,23 @@ async def test_week_endpoint_returns_seven_days(client):
     assert body["days"][0]["is_today"] is True
     assert body["days"][1]["is_today"] is False
     assert "weekday" in body["days"][0]
+
+
+@pytest.mark.asyncio
+async def test_calendar_auth_expired_flag_reaches_today_data(client, monkeypatch):
+    """認証失効がSSE配信データ (TodayData.calendar_auth_expired) まで伝わる。
+
+    これがフロントの ⚠ Google再認証が必要 バッジの表示条件になる。
+    """
+    from app.services import google_calendar
+
+    await refresh_data()
+
+    monkeypatch.setattr(google_calendar, "_auth_state", {"husband": "expired"})
+    data = await get_current_data()
+    assert data.calendar_auth_expired is True
+
+    # 未認証(missing)だけなら警告は出さない
+    monkeypatch.setattr(google_calendar, "_auth_state", {"husband": "ok", "wife": "missing"})
+    data = await get_current_data()
+    assert data.calendar_auth_expired is False

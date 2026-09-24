@@ -17,6 +17,7 @@
 - **学校配布物スキャン → Gemini解析 → カレンダー自動登録**
 - **SSE（Server-Sent Events）によるリアルタイム更新**
 - **トークンベースのAPI認証**
+- **Google認証の失効検知**（`/api/health` が実際に refresh できるか判定し、失効中は画面に ⚠ バッジ表示）
 - **PWA対応**（フルスクリーン、オフラインキャッシュ）
 - 5分ごとの自動データ更新、画面のスリープ防止（Wake Lock）
 
@@ -31,7 +32,7 @@ Android タブレット (ブラウザ / PWA)
         ├── SSE:  GET  /api/stream              → リアルタイムデータ配信
         ├── REST: GET  /api/briefing            → 朝の音声ブリーフィング読み上げテキスト（平文）
         ├── REST: POST /api/briefing/speak      → ブリーフィングを Google Home で今すぐ再生
-        ├── REST: GET  /api/briefing/audio/{nonce}.wav → Google Home が取得する音声（nonce で保護）
+        ├── REST: GET  /api/briefing/cast/{nonce}.mp3 → Google Home が取得する音声（nonce で保護）
         ├── REST: POST /api/tasks/complete       → タスク完了（IDはボディで送る）
         ├── REST: POST /api/tasks/uncomplete     → 完了取消
         ├── REST: GET  /api/weekly-tasks         → 曜日タスク一覧
@@ -134,7 +135,10 @@ cp .env.example .env
 
 1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクト作成
 2. 「APIとサービス」→「ライブラリ」→ **Google Calendar API** を有効化
-3. 「OAuth 同意画面」→ 外部 → アプリ名等を入力 → テストユーザーに夫婦のGmailを追加
+3. 「OAuth 同意画面」→ 外部 → アプリ名等を入力 → **公開ステータスを「本番」にする**
+   （「テスト」のままだと refresh token が **7日で強制失効**し、毎週再認証が必要になる。
+   利用者が100人未満なら Google の審査は不要で、認証時に出る「確認されていないアプリ」
+   警告を「詳細 → 安全でないページに移動」で通過すればよい）
 4. 「認証情報」→「OAuth クライアント ID」→ **デスクトップアプリ** で作成
 5. JSONダウンロード → `credentials.json` としてプロジェクトルートに配置
 6. 初回認証（ブラウザが開く）:
@@ -146,7 +150,11 @@ python setup_google_auth.py wife
 
 `tokens/husband.json`, `tokens/wife.json` が生成されれば成功。
 
-> **注意:** トークンは約6ヶ月で失効。症状は「予定が急に消える」。`logs/dashboard.log` で `invalid_grant` を確認して再実行。
+> **注意:** 失効すると「予定が急に消える」。`logs/dashboard.log` の `invalid_grant`、または
+> `/api/health` の `google_calendar.needs_reauth` で確認して再実行する。
+> 失効中はダッシュボードの「今日の予定」ヘッダーに ⚠ Google再認証が必要 バッジが出る。
+> **再認証のちょうど7日後に毎回失効する場合は公開ステータスが「テスト」のまま**（上記 手順3）。
+> 公開ステータスを変えても既存トークンは復活しないので、切り替え後に一度再認証すること。
 
 #### ファミリーカレンダー
 
@@ -338,7 +346,8 @@ python -m pytest tests/ -v
 
 | 症状 | 原因と対処 |
 |------|-----------|
-| 予定が急に表示されなくなった | Google OAuth トークン期限切れ（約6ヶ月）。`logs/dashboard.log` で `invalid_grant` 確認 → `python setup_google_auth.py husband` 等で再認証 |
+| 予定が急に表示されなくなった | Google OAuth トークン失効。`curl -s localhost:8080/api/health` の `google_calendar.needs_reauth` を確認 → `python setup_google_auth.py husband` で再認証。画面にも ⚠ バッジが出る |
+| 再認証しても7日で必ずまた切れる | OAuth 同意画面が「テスト」公開ステータスのまま（テストモードは refresh token を7日で失効させる）。Console で「本番」に切り替えてから再認証する（§4.2 手順3） |
 | 天気が表示されない / 古い | `python3 -c "from app.services.weather import fetch_weather; print(fetch_weather())"` で単体確認。ネットワーク問題ならサーバー再起動で再取得 |
 | チェックしてもタスクが消えない | `POST /api/tasks/complete` が 404 になっていないかブラウザDevToolsで確認。正常なら200でSSE再配信後に消える |
 | リマインダーに完了が反映されない | `logs/dashboard.log` で `complete_reminder.applescript タイムアウト` を確認。対象リスト名引数が渡されているか確認 |

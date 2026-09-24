@@ -55,6 +55,22 @@ def _event_color(event: dict, owner: str) -> str:
     return OWNER_COLORS.get(owner, DEFAULT_OWNER_COLOR)
 
 
+# 直近の認証状態。get_credentials() が呼ばれるたびに更新され、
+# /api/health とダッシュボードの警告表示が参照する。
+# 値: "ok" | "expired"（トークンはあるが更新失敗＝要再認証） | "missing"（未認証）
+_auth_state: dict[str, str] = {}
+
+
+def get_auth_status() -> dict[str, str]:
+    """アカウントごとの直近の認証状態を返す。まだ一度も確認していなければ空。"""
+    return dict(_auth_state)
+
+
+def has_expired_account() -> bool:
+    """再認証が必要なアカウントが1つでもあるか。未認証(missing)は対象外。"""
+    return any(state == "expired" for state in _auth_state.values())
+
+
 def get_credentials(account_name: str) -> Credentials | None:
     token_path = os.path.join(TOKENS_DIR, f"{account_name}.json")
     creds = None
@@ -71,7 +87,16 @@ def get_credentials(account_name: str) -> Credentials | None:
             logger.warning("%s のトークン更新に失敗しました", account_name, exc_info=True)
             creds = None
 
-    return creds if (creds and creds.valid) else None
+    valid = creds is not None and creds.valid
+    if valid:
+        _auth_state[account_name] = "ok"
+    elif os.path.exists(token_path):
+        # トークンはあるのに使えない＝失効/取り消し。再認証が必要な状態。
+        _auth_state[account_name] = "expired"
+    else:
+        _auth_state[account_name] = "missing"
+
+    return creds if valid else None
 
 
 def setup_google_auth(account_name: str):

@@ -78,3 +78,4 @@ class TodayData(BaseModel):
     weather: WeatherData | None = None
     is_holiday: bool = False        # 祝日・振替休日の場合 True
     holiday_name: str | None = None  # 祝日名（例: "元日", "春分の日"）
+    calendar_auth_expired: bool = False  # Google認証が失効し再認証が必要な場合 True

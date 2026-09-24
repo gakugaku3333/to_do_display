@@ -7,48 +7,40 @@ import pytest
 from app.services import speaker
 
 
-def _fake_say(args, **kwargs):
-    out = args[args.index("-o") + 1]
-    with open(out, "wb") as f:
-        f.write(b"RIFF")
+def test_publish_serves_only_latest():
+    first = speaker.publish_audio(b"one")
+    second = speaker.publish_audio(b"two")
+    assert speaker.get_published_audio(first) is None
+    assert speaker.get_published_audio(second) == b"two"
+    assert speaker.get_published_audio("guess") is None
 
 
-def test_synthesize_serves_only_latest(tmp_path, monkeypatch):
-    monkeypatch.setattr(speaker, "AUDIO_DIR", tmp_path)
-    with patch("subprocess.run", side_effect=_fake_say):
-        first = speaker.synthesize("一回目")
-        second = speaker.synthesize("二回目")
-    assert speaker.get_audio_path(first) is None
-    assert speaker.get_audio_path(second).exists()
-    assert speaker.get_audio_path("guess") is None
-
-
-def test_speak_builds_url_and_casts(tmp_path, monkeypatch):
-    monkeypatch.setattr(speaker, "AUDIO_DIR", tmp_path)
+def test_play_builds_url_and_casts(monkeypatch):
     monkeypatch.setattr(speaker.settings, "google_home_name", "リビング")
     monkeypatch.setattr(speaker.settings, "public_base_url", "http://mac.local:8080/")
-    with patch("subprocess.run", side_effect=_fake_say), \
-         patch.object(speaker, "cast_audio") as cast:
-        speaker.speak("おはようございます")
+    monkeypatch.setattr(speaker.settings, "google_home_volume", -1.0)
+    with patch.object(speaker, "cast_audio") as cast:
+        speaker.play(b"mp3")
     url, name, volume = cast.call_args.args
-    assert url.startswith("http://mac.local:8080/api/briefing/audio/")
-    assert url.endswith(".wav")
+    assert url.startswith("http://mac.local:8080/api/briefing/cast/")
+    assert url.endswith(".mp3")
     assert name == "リビング"
     assert volume is None
+    nonce = url.rsplit("/", 1)[1].removesuffix(".mp3")
+    assert speaker.get_published_audio(nonce) == b"mp3"
 
 
-def test_speak_requires_device_name(monkeypatch):
+def test_play_requires_device_name(monkeypatch):
     monkeypatch.setattr(speaker.settings, "google_home_name", "")
     with pytest.raises(RuntimeError):
-        speaker.speak("x")
+        speaker.play(b"x")
 
 
 @pytest.mark.asyncio
-async def test_audio_endpoint(client, tmp_path, monkeypatch):
-    monkeypatch.setattr(speaker, "AUDIO_DIR", tmp_path)
-    with patch("subprocess.run", side_effect=_fake_say):
-        nonce = speaker.synthesize("テスト")
-    r = await client.get(f"/api/briefing/audio/{nonce}.wav")
+async def test_cast_audio_endpoint(client):
+    nonce = speaker.publish_audio(b"mp3data")
+    r = await client.get(f"/api/briefing/cast/{nonce}.mp3")
     assert r.status_code == 200
-    assert r.headers["content-type"] == "audio/wav"
-    assert (await client.get("/api/briefing/audio/wrong.wav")).status_code == 404
+    assert r.headers["content-type"] == "audio/mpeg"
+    assert r.content == b"mp3data"
+    assert (await client.get("/api/briefing/cast/wrong.mp3")).status_code == 404

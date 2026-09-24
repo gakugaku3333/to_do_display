@@ -12,7 +12,8 @@
 // 重要: 以前は全アセットが cache-first だったため、app.js を更新しても
 // 古いコードが配信され続ける問題があった。コード系を network-first にして解消。
 
-const CACHE_VERSION = 'v5';
+// style.css は stale-while-revalidate なので、CSS を変更したらここを上げて即反映させる。
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `dashboard-${CACHE_VERSION}`;
 
 // オフライン起動に最低限必要なアセット

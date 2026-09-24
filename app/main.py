@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import close_connection, init_db
 from app.logging_config import setup_logging
-from app.routers import dashboard, health, reminders, school_docs, tasks, weekly_tasks
+from app.routers import dashboard, health, reminders, school_docs, tasks, uma_story, weekly_tasks
 from app.scheduler import refresh_data, refresh_weather, start_scheduler, stop_scheduler
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,7 @@ app.include_router(weekly_tasks.router)
 app.include_router(health.router)
 app.include_router(school_docs.router)
 app.include_router(reminders.router)
+app.include_router(uma_story.router)
 
 # コード系ファイルは常に再検証させる（StaticFiles は no-cache ヘッダーを付けないため専用ルートで配信）。
 # Safari の HTTP キャッシュに古いバージョンが残っていると SW の precache も汚染されるため、

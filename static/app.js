@@ -321,15 +321,23 @@ function renderWeather(weather) {
   }
 }
 
+// Google認証が失効している間だけ、予定パネルに警告バッジを出す。
+// 接続状態を表す #status-banner とは別枠にして、SSE 受信のたびに消されないようにする。
+function renderCalendarAuthWarning(expired) {
+  const el = document.getElementById('calendar-auth-warning');
+  if (!el) return;
+  el.className = expired ? 'auth-warning' : 'hidden';
+}
+
 // ===== 統合描画 =====
 function renderAll(data) {
-  todayIsHoliday = !!data.is_holiday;  // スリープ判定（平日昼OFF）の祝日除外に使う
   updateDateDisplay(data);
   renderWeather(data.weather || null);
   renderEvents(data.events);
   renderTasks(data.stock_tasks, 'stock-list');
   renderTasks(data.flow_tasks, 'flow-list');
   document.getElementById('flow-title').textContent = '🔄 今日のやる事リスト';
+  renderCalendarAuthWarning(data.calendar_auth_expired === true);
   syncProposals(data.proposals || []);
 }
 
@@ -690,20 +698,11 @@ function connectSSE() {
 // ===== Screen Wake Lock (タブレットのスリープ防止) =====
 // 画面をOFFにすべき時間帯は Wake Lock を解放する（Mac側のADBスケジュールで画面を
 // スリープさせるため、ここで起こし続けると喧嘩する）。スケジュールはMac側と一致:
-//   共通          : 21:30–06:00 はOFF
-//   平日(月–金・非祝日): さらに 08:00–15:00 もOFF
-//   土日・祝日     : 夜間のみOFF
-// 祝日判定は SSE データの is_holiday を使う（renderAll で更新）。
-let todayIsHoliday = false;
-
+//   06:00–08:00 のみON、それ以外は終日OFF
 function shouldScreenBeOff() {
   const n = new Date();
-  const hm = n.getHours() * 100 + n.getMinutes(); // 例 21:30 → 2130
-  if (hm >= 2130 || hm < 600) return true;        // 夜間（共通）
-  const dow = n.getDay();                          // 0=日..6=土
-  const isWeekday = dow >= 1 && dow <= 5;
-  if (isWeekday && !todayIsHoliday && hm >= 800 && hm < 1500) return true; // 平日の日中
-  return false;
+  const hm = n.getHours() * 100 + n.getMinutes(); // 例 07:30 → 730
+  return !(hm >= 600 && hm < 800);
 }
 
 let wakeLockSentinel = null;
@@ -731,10 +730,19 @@ function manageWakeLock() {
   }
 }
 
+let hiddenAt = null;
+const SLEEP_RELOAD_MS = 30 * 1000; // 30秒以上のスリープで復帰時にリロード
+
 document.addEventListener('visibilitychange', () => {
   manageWakeLock();
-  if (document.visibilityState === 'visible') {
-    // SSE接続が切れていたら再接続
+  if (document.visibilityState === 'hidden') {
+    hiddenAt = Date.now();
+  } else if (document.visibilityState === 'visible') {
+    if (hiddenAt && Date.now() - hiddenAt >= SLEEP_RELOAD_MS) {
+      window.location.reload();
+      return;
+    }
+    // 短い非表示からの復帰はSSE再接続のみ
     if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
       connectSSE();
     }
@@ -760,6 +768,32 @@ setInterval(() => {
   localStorage.setItem('lastDailyReload', today);
   window.location.reload();
 }, 60 * 1000); // 1分ごとに時刻チェック
+
+// ===== 音声ブリーフィング（手動のみ）=====
+// タブレットにTTSエンジンが無いため、サーバー側で合成済みのmp3を取得して再生する。
+function playBriefing() {
+  const url = API_TOKEN ? `/api/briefing/audio?token=${encodeURIComponent(API_TOKEN)}` : '/api/briefing/audio';
+  return fetch(url)
+    .then((res) => {
+      if (!res.ok) throw new Error(`briefing audio not ready (${res.status})`);
+      return res.blob();
+    })
+    .then((blob) => new Promise((resolve, reject) => {
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.addEventListener('ended', resolve);
+      audio.addEventListener('error', reject);
+      audio.play().catch(reject);
+    }));
+}
+
+// 手動読み上げボタン（生成中は連打防止で無効化）
+const briefingBtn = document.getElementById('briefing-play-btn');
+briefingBtn?.addEventListener('click', () => {
+  briefingBtn.disabled = true;
+  playBriefing()
+    .catch((err) => console.warn('briefing audio playback failed', err))
+    .finally(() => { briefingBtn.disabled = false; });
+});
 
 // ===== 初期化 =====
 connectSSE();

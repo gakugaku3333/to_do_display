@@ -54,7 +54,9 @@ python setup_google_auth.py wife
 ```
 
 ブラウザが開いてGoogleアカウントへのログインが求められます。  
-**注意:** トークンは約6ヶ月で失効します（`feedback_google_oauth_expiry.md` 参照）。
+**注意:** OAuth 同意画面の公開ステータスを「本番」にしておくこと。「テスト」のままだと
+refresh token が7日で失効し、毎週再認証が必要になります（詳細は HANDOVER.md §4.2 / §9）。
+失効すると `/api/health` の `google_calendar.needs_reauth` に出て、画面にも警告バッジが出ます。
 
 ### 4. Apple Reminders の設定
 

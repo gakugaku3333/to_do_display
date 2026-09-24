@@ -69,9 +69,11 @@ def test_build_briefing_text_weekday_tasks_separate():
         ],
     )
     text = build_briefing_text(data)
-    # 通常のやることと曜日ごとのやることが別の文で読み上げられる
-    assert "今日のやることは、牛乳を買う、電気代の支払い、以上です。" in text
-    assert "曜日ごとのやることは、燃えるゴミ出し、以上です。" in text
+    # weeklyタスクのみ「今日のやることは」で読み上げられる
+    assert "今日のやることは、燃えるゴミ出し、以上です。" in text
+    # stock/flowタスクは読み上げない
+    assert "牛乳を買う" not in text
+    assert "電気代の支払い" not in text
 
 
 def test_build_briefing_text_holiday():
@@ -98,7 +100,8 @@ async def test_briefing_endpoint(client):
     assert "おはようございます。" in body
     # モックの予定・タスクが読み上げ文に含まれる
     assert "テスト会議" in body
-    assert "今日のやることは、テストフロー" in body
+    # flowタスクは読み上げ対象外
+    assert "テストフロー" not in body
 
 
 @pytest.mark.asyncio

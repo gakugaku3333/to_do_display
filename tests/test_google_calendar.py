@@ -209,3 +209,41 @@ def test_family_calendar_skipped_when_unset():
         if call.kwargs.get("calendarId")
     }
     assert requested_ids == {"primary@example.com"}
+
+
+def test_auth_state_distinguishes_expired_from_missing(tmp_path, monkeypatch):
+    """トークンがあるのに使えない→expired、そもそも無い→missing。
+
+    expired のときだけ「再認証が必要」とみなす（未認証の妻アカウントで
+    警告が出っぱなしになるのを防ぐ）。
+    """
+    (tmp_path / "husband.json").write_text("{}")
+    monkeypatch.setattr(google_calendar, "TOKENS_DIR", str(tmp_path))
+    monkeypatch.setattr(google_calendar, "_auth_state", {})
+    # 壊れたトークンとして読み込み自体を失敗させず、refresh 不能な資格情報を返す
+    creds = MagicMock(expired=True, refresh_token=None, valid=False)
+    monkeypatch.setattr(
+        google_calendar.Credentials, "from_authorized_user_file",
+        classmethod(lambda cls, path, scopes: creds),
+    )
+
+    assert google_calendar.get_credentials("husband") is None
+    assert google_calendar.get_credentials("wife") is None
+
+    assert google_calendar.get_auth_status() == {"husband": "expired", "wife": "missing"}
+    assert google_calendar.has_expired_account() is True
+
+
+def test_auth_state_ok_when_credentials_valid(tmp_path, monkeypatch):
+    (tmp_path / "husband.json").write_text("{}")
+    monkeypatch.setattr(google_calendar, "TOKENS_DIR", str(tmp_path))
+    monkeypatch.setattr(google_calendar, "_auth_state", {})
+    creds = MagicMock(expired=False, valid=True)
+    monkeypatch.setattr(
+        google_calendar.Credentials, "from_authorized_user_file",
+        classmethod(lambda cls, path, scopes: creds),
+    )
+
+    assert google_calendar.get_credentials("husband") is creds
+    assert google_calendar.get_auth_status()["husband"] == "ok"
+    assert google_calendar.has_expired_account() is False

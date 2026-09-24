@@ -6,9 +6,27 @@ iOS ショートカットの「テキストを読み上げる」アクション�
 絵文字や記号は読み上げが不自然になるため使わず、自然な日本語の平文を返す。
 """
 
+import asyncio
+import tempfile
+import time
 from datetime import date
+from pathlib import Path
 
 from app.models import TodayData, WeatherData
+
+# iOSが誤読する名前をひらがなに置換（読み上げ専用）
+_NAME_READING: dict[str, str] = {
+    "紗奈": "さな",
+    "和花": "のどか",
+    "舞": "まい",
+    "上靴": "うわぐつ",
+    "公文": "くもん",
+}
+
+def _normalize_for_tts(text: str) -> str:
+    for kanji, reading in _NAME_READING.items():
+        text = text.replace(kanji, reading)
+    return text
 
 
 def _date_phrase(data: TodayData) -> str:
@@ -67,21 +85,12 @@ def _events_phrase(data: TodayData) -> str:
 
 
 def _tasks_phrase(data: TodayData) -> str:
-    # flow_tasks には曜日タスク（task_type=="weekly"）も合流済み。
-    # 曜日ごとのタスクは別立てで読み上げる。
     weekday = [t.title for t in data.flow_tasks if t.task_type == "weekly"]
-    todo = [t.title for t in data.flow_tasks if t.task_type != "weekly"]
-    todo += [t.title for t in data.stock_tasks]
 
-    if not weekday and not todo:
+    if not weekday:
         return "今日のやることはありません。"
 
-    parts: list[str] = []
-    if todo:
-        parts.append(f"今日のやることは、{'、'.join(todo)}、以上です。")
-    if weekday:
-        parts.append(f"曜日ごとのやることは、{'、'.join(weekday)}、以上です。")
-    return "".join(parts)
+    return f"今日のやることは、{'、'.join(weekday)}、以上です。"
 
 
 def build_briefing_text(data: TodayData) -> str:
@@ -94,4 +103,49 @@ def build_briefing_text(data: TodayData) -> str:
         _tasks_phrase(data),
         "今日も良い一日を。",
     ]
-    return "\n".join(parts)
+    return _normalize_for_tts("\n".join(parts))
+
+
+async def synthesize_briefing_audio(text: str, voice: str = "Kyoko") -> bytes:
+    """macOSの`say`コマンドで読み上げ音声を生成し、mp3バイト列を返す。
+
+    タブレット端末にTTSエンジンが無い（Google Playサービス非搭載）ため、
+    音声合成はサーバー（Mac）側で行い、生成済み音声ファイルとして配信する。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        aiff_path = Path(tmp) / "briefing.aiff"
+        mp3_path = Path(tmp) / "briefing.mp3"
+
+        # launchd経由の実行はPATHが通っていないため絶対パスを使う
+        say = await asyncio.create_subprocess_exec(
+            "/usr/bin/say", "-v", voice, "-o", str(aiff_path), text,
+        )
+        if await say.wait() != 0:
+            raise RuntimeError("say コマンドが失敗しました")
+
+        ffmpeg = await asyncio.create_subprocess_exec(
+            "/opt/homebrew/bin/ffmpeg", "-y", "-loglevel", "error",
+            "-i", str(aiff_path), str(mp3_path),
+        )
+        if await ffmpeg.wait() != 0:
+            raise RuntimeError("ffmpeg での変換が失敗しました")
+
+        return mp3_path.read_bytes()
+
+
+# 音声合成は数秒かかるため、当日分は使い回す。ただし予定/やる事の変更が反映されない
+# まま丸1日残らないよう、短めのTTLで失効させる（手動ボタンを押す度に毎回合成し直さない程度）。
+_AUDIO_CACHE_TTL_SECONDS = 60 * 60  # 1時間
+_audio_cache: tuple[float, str, bytes] | None = None  # (生成時刻, 日付, mp3バイト列)
+
+
+async def get_briefing_audio(data: TodayData) -> bytes:
+    """当日分のキャッシュがあれば使い回し、無ければ合成してキャッシュする。"""
+    global _audio_cache
+    now = time.monotonic()
+    if _audio_cache and _audio_cache[1] == data.date and now - _audio_cache[0] < _AUDIO_CACHE_TTL_SECONDS:
+        return _audio_cache[2]
+
+    audio = await synthesize_briefing_audio(build_briefing_text(data))
+    _audio_cache = (now, data.date, audio)
+    return audio
