@@ -76,7 +76,7 @@ source .venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
-タブレットのブラウザから `http://[Mac miniのIPアドレス]:8080` にアクセス。
+タブレットのブラウザから `http://[Mac miniのローカルホスト名].local:8080` にアクセス（起動ログの「アクセスURL」に表示）。IP 直指定は DHCP で変わるため非推奨。ルーターでの IP 予約と併用が確実（HANDOVER.md「LAN 内の接続先」参照）。
 
 ### 6. Mac mini 自動起動設定（launchd）
 

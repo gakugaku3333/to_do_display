@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import close_connection, init_db
 from app.logging_config import setup_logging
+from app.network import access_urls
 from app.routers import dashboard, health, reminders, school_docs, tasks, uma_story, weekly_tasks
 from app.scheduler import refresh_data, refresh_weather, start_scheduler, stop_scheduler
 
@@ -35,6 +36,8 @@ async def lifespan(app: FastAPI):
     _spawn_startup_task(refresh_weather())
     _spawn_startup_task(refresh_data())
     logger.info("ダッシュボード起動完了（データ取得はバックグラウンドで実行中）")
+    for url in await asyncio.to_thread(access_urls, settings.port):
+        logger.info("アクセスURL: %s", url)
     yield
     stop_scheduler()
     await close_connection()

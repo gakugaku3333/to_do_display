@@ -232,6 +232,25 @@ launchctl load ~/Library/LaunchAgents/com.family.dashboard.plist
 
 ---
 
+### LAN 内の接続先（Mac mini の IP 変動対策）
+
+Mac mini の IP は DHCP で変わりうるため、**端末に IP を直書きしない**。次の二段構えにする。
+
+1. **ルーターで Mac mini の IP を予約（根本対策・推奨）**
+   ルーター管理画面の「DHCP固定割当」「アドレス予約」等で、Mac mini の MAC アドレスに IP を固定する。
+   MAC アドレスは「システム設定 > ネットワーク > 使用中の接続 > 詳細 > ハードウェア」で確認
+   （有線と Wi-Fi で別。Wi-Fi の場合は「プライベートWi-Fiアドレス」を**オフ**にしておく）。
+2. **`.local` 名で接続（ルーター設定なしでも IP 変動に追従）**
+   macOS は「システム設定 > 一般 > 共有 > ローカルホスト名」を Bonjour で自動公開している。
+   - iPhone ショートカット: URL を `http://<ローカルホスト名>.local:8080/...` にする（iOS は標準対応）
+   - Android タブレット: Android 12 以降なら Chrome で `.local` が解決できる。解決できない機種は 1. の IP 予約で対応
+   - PWA としてホーム画面に追加済みの場合は、新しい URL で開き直して**追加し直す**（旧 URL が起動 URL に保存されているため）
+
+起動時に `logs/dashboard.log` へ `アクセスURL: http://xxx.local:8080` と現在の IP 版の URL が出るので、それを端末に設定する。
+
+Google Home への Cast 再生は `.local` を解決できないことがあるため、`PUBLIC_BASE_URL` は空欄のままにする
+（再生のたびに現在の IP を自動検出する）。
+
 ## 6. 認証情報の管理
 
 ### git管理外のファイル一覧（.gitignore）
@@ -357,7 +376,7 @@ python -m pytest tests/ -v
 | コード修正しても画面が変わらない | Service Worker キャッシュ。**2回リロード**（1回目:新SW起動、2回目:新JS反映）。確実には Safari > 開発 > キャッシュを空にする |
 | Mac再起動後にサービスが起動しない | `launchctl list \| grep family` で確認。plist が `~/Library/LaunchAgents/` にあるか確認 |
 | Google Home で再生されない | `GOOGLE_HOME_NAME` が Google Home アプリの表示名と完全一致しているか、Mac mini とスピーカーが同じLAN（同じSSID・VLAN）にいるか確認。`curl -X POST localhost:8080/api/briefing/speak` のエラー文で原因が分かる |
-| タブレットからアクセスできない | MacのIPアドレス確認（`ipconfig getifaddr en0`）+ ファイアウォールでport 8080を許可 |
+| タブレットからアクセスできない | `logs/dashboard.log` の「アクセスURL」を確認（IP が変わっていれば §5「LAN 内の接続先」の IP 予約 / `.local` 名へ移行）+ ファイアウォールでport 8080を許可 |
 
 ---
 

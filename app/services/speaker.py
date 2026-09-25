@@ -15,9 +15,9 @@ Mac mini 側の URL は再生の直前に自分の LAN IP を検出して組み�
 
 import logging
 import secrets
-import socket
 
 from app.config import settings
+from app.network import local_ip
 
 logger = logging.getLogger(__name__)
 
@@ -39,17 +39,9 @@ def get_published_audio(nonce: str) -> bytes | None:
     return None
 
 
-def local_ip() -> str:
-    """Google Home から到達できる自分の LAN IP を検出する（パケットは送信しない）。"""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
-    finally:
-        s.close()
-
-
 def base_url() -> str:
+    # Cast デバイスは .local 名を解決できないことがあるため、既定では
+    # 再生のたびに現在の LAN IP を検出して使う（IP が変わっても追従する）。
     if settings.public_base_url:
         return settings.public_base_url.rstrip("/")
     return f"http://{local_ip()}:{settings.port}"
