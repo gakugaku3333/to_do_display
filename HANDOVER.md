@@ -297,7 +297,7 @@ CREATE TABLE IF NOT EXISTS event_proposals (
 CREATE TABLE IF NOT EXISTS weekly_tasks (
     id         TEXT PRIMARY KEY,
     title      TEXT NOT NULL,
-    weekdays   TEXT NOT NULL DEFAULT '',  -- JSON配列: [0,1,4] (0=月〜6=日)
+    weekdays   TEXT NOT NULL DEFAULT '',  -- カンマ区切り: 0,1,4 (0=月〜6=日)
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
@@ -307,6 +307,7 @@ CREATE TABLE IF NOT EXISTS weekly_tasks (
 - **ストックタスク**: 完了状態は永続
 - **フロータスク**: 日付変更時に `cleanup_old_flow_completions()` で自動削除
 - **曜日タスク**: 当日日付を `due_date` として記録、翌日リセット
+- **曜日タスクの更新・削除**: 対象IDがなければ `404`。接続全体の累積変更数では別操作の変更も数えてしまうため、SQL文の `cursor.rowcount` で判定する。`tests/test_database.py` と `tests/test_weekly_tasks.py` で、作成後に存在しないIDを指定するケースを確認する。
 
 ### タスク完了APIの重要な設計
 
