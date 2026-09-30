@@ -11,6 +11,7 @@ M4 Mac mini 上で動作するFastAPIバックエンドと、ダイニングのA
 - **日本の祝日・土曜日の色分け表示**（祝日名バッジ表示、jpholiday使用）
 - 学校配布物スキャン → Gemini解析 → カレンダー自動登録
 - **朝の音声ブリーフィング**（`/api/briefing` が日付・天気・予定・やる事の読み上げ用テキストを返す。iPhoneのショートカット個人用オートメーションで毎朝7時に読み上げ）
+- **Google Home での音声ブリーフィング**（毎朝 `BRIEFING_CAST_TIME` に Mac mini が macOS `say` で音声を作り、LAN 内の Google Home へ Cast 再生。`POST /api/briefing/speak` で手動再生も可。スピーカーは名前で探し、Mac の IP も自動検出するので固定IP不要）
 - SSEリアルタイム更新、5分ごと自動同期
 - PWA対応（フルスクリーン・オフラインキャッシュ）
 
@@ -75,7 +76,7 @@ source .venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
-タブレットのブラウザから `http://[Mac miniのIPアドレス]:8080` にアクセス。
+タブレットのブラウザから `http://[Mac miniのローカルホスト名].local:8080` にアクセス（起動ログの「アクセスURL」に表示）。IP 直指定は DHCP で変わるため非推奨。ルーターでの IP 予約と併用が確実（HANDOVER.md「LAN 内の接続先」参照）。
 
 ### 6. Mac mini 自動起動設定（launchd）
 

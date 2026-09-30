@@ -43,19 +43,17 @@ async def get_current_data() -> TodayData | None:
 
     proposals = [EventProposal(**p) for p in pending]
 
-    return TodayData(
-        date=data.date,
-        weekday=data.weekday,
-        events=data.events,
-        stock_tasks=updated_stock,
-        flow_tasks=updated_flow,
-        last_refresh=data.last_refresh,
-        proposals=proposals,
-        weather=data.weather,
-        is_holiday=data.is_holiday,
-        holiday_name=data.holiday_name,
-        calendar_auth_expired=google_calendar.has_expired_account(),
-    )
+    return data.model_copy(update={
+        "stock_tasks": updated_stock,
+        "flow_tasks": updated_flow,
+        "proposals": proposals,
+        "calendar_auth_expired": google_calendar.has_expired_account(),
+    })
+
+
+def holiday_name_of(d: date) -> str | None:
+    """祝日なら祝日名、平日・土日なら None を返す。"""
+    return jpholiday.is_holiday_name(d) or None
 
 
 def get_empty_data() -> TodayData:
@@ -84,7 +82,7 @@ async def get_week_data(days: int = 7) -> WeekData:
     for i in range(days):
         d = today + timedelta(days=i)
         ds = d.isoformat()
-        holiday_name: str | None = jpholiday.is_holiday_name(d) or None
+        holiday_name = holiday_name_of(d)
         week_days.append(WeekDay(
             date=ds,
             weekday=WEEKDAYS_JA[d.weekday()],

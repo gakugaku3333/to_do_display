@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import close_connection, init_db
 from app.logging_config import setup_logging
+from app.network import access_urls
 from app.routers import dashboard, health, reminders, school_docs, tasks, uma_story, weekly_tasks
 from app.scheduler import refresh_data, refresh_weather, start_scheduler, stop_scheduler
 
@@ -35,6 +36,8 @@ async def lifespan(app: FastAPI):
     _spawn_startup_task(refresh_weather())
     _spawn_startup_task(refresh_data())
     logger.info("ダッシュボード起動完了（データ取得はバックグラウンドで実行中）")
+    for url in await asyncio.to_thread(access_urls, settings.port):
+        logger.info("アクセスURL: %s", url)
     yield
     stop_scheduler()
     await close_connection()
@@ -54,19 +57,26 @@ app.include_router(uma_story.router)
 # コード系ファイルは常に再検証させる（StaticFiles は no-cache ヘッダーを付けないため専用ルートで配信）。
 # Safari の HTTP キャッシュに古いバージョンが残っていると SW の precache も汚染されるため、
 # sw.js / app.js / style.css すべてに no-cache を付与する。
+# app.mount("/static") より先に登録しないと StaticFiles 側が優先され no-cache が付かない。
 _NO_CACHE = {"Cache-Control": "no-cache"}
+_NO_CACHE_FILES = {
+    "sw.js": "application/javascript",
+    "app.js": "application/javascript",
+    "style.css": "text/css",
+}
 
-@app.get("/static/sw.js")
-async def service_worker():
-    return FileResponse("static/sw.js", media_type="application/javascript", headers=_NO_CACHE)
 
-@app.get("/static/app.js")
-async def app_js():
-    return FileResponse("static/app.js", media_type="application/javascript", headers=_NO_CACHE)
+def _add_no_cache_route(filename: str, media_type: str) -> None:
+    path = f"static/{filename}"
 
-@app.get("/static/style.css")
-async def style_css():
-    return FileResponse("static/style.css", media_type="text/css", headers=_NO_CACHE)
+    async def serve():
+        return FileResponse(path, media_type=media_type, headers=_NO_CACHE)
+
+    app.add_api_route(f"/{path}", serve, methods=["GET"], name=f"static_{filename}")
+
+
+for _filename, _media_type in _NO_CACHE_FILES.items():
+    _add_no_cache_route(_filename, _media_type)
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
