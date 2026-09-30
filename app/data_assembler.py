@@ -51,6 +51,11 @@ async def get_current_data() -> TodayData | None:
     })
 
 
+def holiday_name_of(d: date) -> str | None:
+    """祝日なら祝日名、平日・土日なら None を返す。"""
+    return jpholiday.is_holiday_name(d) or None
+
+
 def get_empty_data() -> TodayData:
     """空のTodayDataを返す（キャッシュが存在しない場合のフォールバック）"""
     today = date.today()
@@ -77,7 +82,7 @@ async def get_week_data(days: int = 7) -> WeekData:
     for i in range(days):
         d = today + timedelta(days=i)
         ds = d.isoformat()
-        holiday_name: str | None = jpholiday.is_holiday_name(d) or None
+        holiday_name = holiday_name_of(d)
         week_days.append(WeekDay(
             date=ds,
             weekday=WEEKDAYS_JA[d.weekday()],

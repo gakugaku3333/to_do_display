@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 
 from app.auth import verify_token
+from app.daily_cache import DailyTTLCache
 from app.data_assembler import get_current_data, get_empty_data, get_week_data
-from app.models import WeekData
+from app.models import TodayData, WeekData
 from app.services import speaker
 from app.services.briefing import build_briefing_text, get_briefing_audio
 from app.sse import sse_manager
@@ -19,20 +20,32 @@ router = APIRouter()
 
 # 週間予定は Google Calendar をオンデマンド取得するため、短時間の連打で
 # 同じ取得を繰り返さないよう TTL キャッシュする。日付が変わったら無効化する。
-_WEEK_TTL_SECONDS = 300
-_week_cache: tuple[float, str, WeekData] | None = None  # (取得時刻, 取得日, データ)
+_week_cache: DailyTTLCache[WeekData] = DailyTTLCache(ttl_seconds=300)
+
+
+async def _current_data_or_empty() -> TodayData:
+    """キャッシュ未取得（起動直後）でも表示できるよう、空データで代替する。"""
+    return await get_current_data() or get_empty_data()
+
+
+async def _require_current_data() -> TodayData:
+    """起動直後などデータ取得が未完了なら 503 を返す（空の読み上げを防ぐ）。"""
+    data = await get_current_data()
+    if data is None:
+        raise HTTPException(status_code=503, detail="データ取得が未完了です")
+    return data
 
 
 @router.get("/api/week", dependencies=[Depends(verify_token)])
 async def week_view() -> WeekData:
-    global _week_cache
-    now = time.monotonic()
     today = date.today().isoformat()
-    if _week_cache and _week_cache[1] == today and now - _week_cache[0] < _WEEK_TTL_SECONDS:
-        return _week_cache[2]
+    cached = _week_cache.get(today)
+    if cached is not None:
+        return cached
 
+    started = time.monotonic()
     data = await get_week_data()
-    _week_cache = (now, today, data)
+    _week_cache.set(today, data, saved_at=started)
     return data
 
 
@@ -43,9 +56,7 @@ async def briefing() -> PlainTextResponse:
     iOS ショートカット（個人用オートメーション）から毎朝呼び出し、
     「テキストを読み上げる」アクションで再生する想定。
     """
-    data = await get_current_data()
-    if data is None:
-        data = get_empty_data()
+    data = await _current_data_or_empty()
     return PlainTextResponse(build_briefing_text(data), headers={"Cache-Control": "no-cache"})
 
 
@@ -61,18 +72,14 @@ async def briefing_audio() -> Response:
     起動直後などバックグラウンドのデータ取得が未完了（get_current_dataがNone）の
     場合は、空のブリーフィングを読み上げてしまわないよう503を返す。
     """
-    data = await get_current_data()
-    if data is None:
-        raise HTTPException(status_code=503, detail="データ取得が未完了です")
-    audio = await get_briefing_audio(data)
+    audio = await get_briefing_audio(await _require_current_data())
     return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "no-cache"})
 
 
 @router.post("/api/briefing/speak", dependencies=[Depends(verify_token)])
 async def briefing_speak() -> dict:
     """ブリーフィングを今すぐ Google Home で再生する（手動・ショートカット用）。"""
-    if await get_current_data() is None:
-        raise HTTPException(status_code=503, detail="データ取得が未完了です")
+    await _require_current_data()
     try:
         await speak_briefing()
     except Exception as e:
@@ -110,9 +117,7 @@ async def event_stream(request: Request):
     async def generate():
         try:
             # 初回接続時に現在データを即送信
-            data = await get_current_data()
-            if data is None:
-                data = get_empty_data()
+            data = await _current_data_or_empty()
             yield f"data: {data.model_dump_json()}\n\n"
 
             while True:

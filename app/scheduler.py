@@ -5,11 +5,10 @@ import logging
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-import jpholiday
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import settings
-from app.data_assembler import broadcast_current_data
+from app.data_assembler import broadcast_current_data, holiday_name_of
 from app.database import (
     cleanup_old_flow_completions,
     get_prev_weather_temps,
@@ -87,8 +86,7 @@ async def refresh_data():
     today = date.today()
     today_str = today.isoformat()
     weekday_ja = WEEKDAYS_JA[today.weekday()]
-    holiday_name: str | None = jpholiday.is_holiday_name(today) or None
-    is_holiday = holiday_name is not None
+    holiday_name = holiday_name_of(today)
 
     await cleanup_old_flow_completions(today_str)
 
@@ -114,7 +112,7 @@ async def refresh_data():
         flow_tasks=flow_tasks,
         last_refresh=now_local.strftime("%H:%M"),
         weather=_cached_weather,
-        is_holiday=is_holiday,
+        is_holiday=holiday_name is not None,
         holiday_name=holiday_name,
     )
     _last_refresh = now_local
@@ -158,31 +156,28 @@ async def _cast_briefing():
         logger.error("朝のブリーフィング再生に失敗しました", exc_info=True)
 
 
+def _add_daily_job(job_id: str, func, hour: int, minute: int, **kwargs) -> None:
+    """毎日 hour:minute（設定タイムゾーン）に func を実行するジョブを登録する。"""
+    _scheduler.add_job(
+        func, "cron",
+        hour=hour, minute=minute, timezone=settings.timezone,
+        id=job_id, max_instances=1, coalesce=True,
+        **kwargs,
+    )
+
+
 def start_scheduler():
     _scheduler.add_job(
         refresh_data, "interval", minutes=5,
         id="refresh_data", max_instances=1, coalesce=True,
     )
     # 毎朝 6:00 にその日の最新予報を取得（force=True で必ず取り直す）
-    _scheduler.add_job(
-        refresh_weather, "cron",
-        hour=6, minute=0, timezone=settings.timezone,
-        kwargs={"force": True},
-        id="refresh_weather", max_instances=1, coalesce=True,
-    )
+    _add_daily_job("refresh_weather", refresh_weather, 6, 0, kwargs={"force": True})
     # 毎朝6:30に音声ブリーフィングを事前生成（タブレットの🔊ボタン押下を高速化）
-    _scheduler.add_job(
-        prewarm_briefing_audio, "cron",
-        hour=6, minute=30, timezone=settings.timezone,
-        id="prewarm_briefing_audio", max_instances=1, coalesce=True,
-    )
+    _add_daily_job("prewarm_briefing_audio", prewarm_briefing_audio, 6, 30)
     if settings.google_home_name and settings.briefing_cast_time:
         hour, minute = (int(x) for x in settings.briefing_cast_time.split(":"))
-        _scheduler.add_job(
-            _cast_briefing, "cron",
-            hour=hour, minute=minute, timezone=settings.timezone,
-            id="cast_briefing", max_instances=1, coalesce=True,
-        )
+        _add_daily_job("cast_briefing", _cast_briefing, hour, minute)
     _scheduler.start()
 
 

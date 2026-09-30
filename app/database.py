@@ -12,6 +12,10 @@ DB_PATH = "dashboard.db"
 _connection: aiosqlite.Connection | None = None
 
 
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _rows_to_dicts(cursor: aiosqlite.Cursor, rows: list) -> list[dict]:
     """SELECT * 系の結果を列名つき dict のリストに変換する（cursor は open のまま渡す）。"""
     cols = [d[0] for d in cursor.description]
@@ -101,7 +105,7 @@ async def get_completed_ids() -> set[str]:
 
 async def mark_complete(task_id: str, task_type: str, due_date: str | None):
     try:
-        now = datetime.now(timezone.utc).isoformat()
+        now = _utcnow_iso()
         db = await get_connection()
         await db.execute(
             "INSERT OR REPLACE INTO task_completions (task_id, task_type, completed_at, due_date) VALUES (?, ?, ?, ?)",
@@ -125,7 +129,7 @@ async def mark_incomplete(task_id: str):
 
 async def save_proposals(proposals: list[dict]):
     try:
-        now = datetime.now(timezone.utc).isoformat()
+        now = _utcnow_iso()
         db = await get_connection()
         for p in proposals:
             await db.execute(
@@ -204,7 +208,7 @@ async def cleanup_old_flow_completions(today_str: str):
 async def save_weather_cache(date_str: str, temp_max: int | None, temp_min: int | None, payload: str):
     """指定日の天気を保存（同日は上書き）。古い行はまとめて掃除する。"""
     try:
-        now = datetime.now(timezone.utc).isoformat()
+        now = _utcnow_iso()
         db = await get_connection()
         await db.execute(
             "INSERT OR REPLACE INTO weather_cache (date, temp_max, temp_min, payload, fetched_at) "
@@ -294,7 +298,7 @@ async def get_weekly_tasks_for_weekday(weekday: int) -> list[dict]:
 
 async def create_weekly_task(title: str, weekdays: list[int]) -> str:
     task_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = _utcnow_iso()
     try:
         db = await get_connection()
         await db.execute(

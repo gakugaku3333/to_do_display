@@ -76,11 +76,12 @@ to_do_display/
 │   ├── database.py              # SQLite操作（接続一元管理、WALモード）
 │   ├── scheduler.py             # APScheduler（5分間隔 + 毎朝6:15天気更新）
 │   ├── sse.py                   # SSEManager（クライアント接続管理、ブロードキャスト）
-│   ├── data_assembler.py        # キャッシュ + 完了状態フィルタリングの共通ロジック
+│   ├── data_assembler.py        # キャッシュ + 完了状態フィルタリングの共通ロジック、祝日判定 holiday_name_of
+│   ├── daily_cache.py           # 日付キーつき TTL キャッシュ（週間予定・ブリーフィング音声）
 │   ├── auth.py                  # トークン認証（Bearer / query param）
 │   ├── logging_config.py        # ロギング設定（RotatingFileHandler）
 │   ├── routers/
-│   │   ├── dashboard.py         # GET /api/stream (SSE)
+│   │   ├── dashboard.py         # GET /api/stream (SSE), /api/week, /api/briefing(/audio|/speak|/cast)
 │   │   ├── tasks.py             # POST /api/tasks/complete|uncomplete
 │   │   ├── weekly_tasks.py      # CRUD /api/weekly-tasks
 │   │   ├── school_docs.py       # POST /api/school-docs/scan
