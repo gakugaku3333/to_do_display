@@ -16,23 +16,29 @@ logger = logging.getLogger(__name__)
 # macOS の osascript (AppleScript) 経由で Reminders.app にアクセスする。
 # CalDAV は iOS 13+ / macOS Catalina 以降、Apple Reminders に非対応のため使用不可。
 
-_SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "fetch_reminders.applescript"
-_COMPLETE_SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "complete_reminder.applescript"
-_CREATE_SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "create_reminder.applescript"
+_SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
+_SCRIPT_PATH = _SCRIPTS_DIR / "fetch_reminders.applescript"
+_COMPLETE_SCRIPT_PATH = _SCRIPTS_DIR / "complete_reminder.applescript"
+_CREATE_SCRIPT_PATH = _SCRIPTS_DIR / "create_reminder.applescript"
 
 # 初回実行は iCloud 同期で時間がかかることがある
 _OSASCRIPT_TIMEOUT = 120
 
 
+def _run_osascript(script: Path, *args: str, timeout: int) -> subprocess.CompletedProcess[str]:
+    """AppleScript を引数つきで実行する。タイムアウト時は TimeoutExpired を送出する。"""
+    return subprocess.run(
+        ["osascript", str(script), *args],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
 def _fetch_reminders_from_list(list_name: str) -> list[dict]:
     """osascript 経由で指定リストのリマインダーを取得する"""
     try:
-        result = subprocess.run(
-            ["osascript", str(_SCRIPT_PATH), list_name],
-            capture_output=True,
-            text=True,
-            timeout=_OSASCRIPT_TIMEOUT,
-        )
+        result = _run_osascript(_SCRIPT_PATH, list_name, timeout=_OSASCRIPT_TIMEOUT)
         if result.returncode != 0:
             stderr = result.stderr.strip()
             if "Can't get list" in stderr:
@@ -110,6 +116,11 @@ def _parse_reminder(rem: dict, task_type: str, today: date) -> Task | None:
     return None
 
 
+def _parse_reminders(rems: list[dict], task_type: str, today: date) -> list[Task]:
+    """リマインダー dict 群を Task に変換し、表示対象外（None）を除く。"""
+    return [task for rem in rems if (task := _parse_reminder(rem, task_type, today))]
+
+
 def fetch_tasks() -> tuple[list[Task], list[Task]]:
     """ストック・フロー両リストからタスクを並列取得する"""
     today = date.today()
@@ -124,18 +135,8 @@ def fetch_tasks() -> tuple[list[Task], list[Task]]:
         stock_rems = stock_future.result()
         flow_rems = flow_future.result()
 
-    stock_tasks: list[Task] = []
-    flow_tasks: list[Task] = []
-
-    for rem in stock_rems:
-        task = _parse_reminder(rem, "stock", today)
-        if task:
-            stock_tasks.append(task)
-
-    for rem in flow_rems:
-        task = _parse_reminder(rem, "flow", today)
-        if task:
-            flow_tasks.append(task)
+    stock_tasks = _parse_reminders(stock_rems, "stock", today)
+    flow_tasks = _parse_reminders(flow_rems, "flow", today)
 
     logger.info(
         "Reminders 取得完了: ストック=%d件, フロー=%d件",
@@ -154,13 +155,8 @@ def set_reminder_completed(task_id: str, completed: bool, list_names: list[str] 
     if sys.platform != "darwin":
         return False
     try:
-        args = ["osascript", str(_COMPLETE_SCRIPT_PATH), task_id, str(completed).lower()]
-        if list_names:
-            args.extend(list_names)
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
+        result = _run_osascript(
+            _COMPLETE_SCRIPT_PATH, task_id, str(completed).lower(), *(list_names or []),
             timeout=60,
         )
         if result.returncode != 0:
@@ -191,12 +187,7 @@ def create_reminder(
         return None
     due_arg = due_date if due_date else "null"
     try:
-        result = subprocess.run(
-            ["osascript", str(_CREATE_SCRIPT_PATH), list_name, title, body, due_arg],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        result = _run_osascript(_CREATE_SCRIPT_PATH, list_name, title, body, due_arg, timeout=30)
         if result.returncode != 0:
             logger.error(
                 "create_reminder.applescript エラー (list=%s, title=%s): %s",

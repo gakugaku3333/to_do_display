@@ -46,7 +46,7 @@ async def test_week_endpoint_returns_seven_days(client):
     """/api/week は今日起点で7日分の構造を返す"""
     import app.routers.dashboard as dashboard_module
 
-    dashboard_module._week_cache = None  # TTLキャッシュをリセット
+    dashboard_module._week_cache.clear()  # TTLキャッシュをリセット
     today = date.today()
 
     def _mock_week(tz_name="Asia/Tokyo", days=7):

@@ -49,3 +49,24 @@ async def test_cleanup_old_flow_completions(test_db):
     assert "flow-2" in ids
     # stock-1 (stockタイプ) は影響なし
     assert "stock-1" in ids
+
+
+@pytest.mark.asyncio
+async def test_weekly_task_crud_reports_only_matching_rows(test_db):
+    task_id = await db_module.create_weekly_task("掃除", [4, 1])
+    assert await db_module.get_all_weekly_tasks() == [
+        {"id": task_id, "title": "掃除", "weekdays": [1, 4], "sort_order": 0}
+    ]
+
+    # 作成による変更が残っていても、存在しないIDは更新・削除成功にならない。
+    assert await db_module.update_weekly_task("missing", "変更", [2]) is False
+    assert await db_module.delete_weekly_task("missing") is False
+
+    assert await db_module.update_weekly_task(task_id, "片付け", [6, 0]) is True
+    assert await db_module.get_weekly_tasks_for_weekday(0) == [
+        {"id": task_id, "title": "片付け", "weekdays": [0, 6], "sort_order": 0}
+    ]
+
+    assert await db_module.delete_weekly_task(task_id) is True
+    assert await db_module.delete_weekly_task(task_id) is False
+    assert await db_module.get_all_weekly_tasks() == []

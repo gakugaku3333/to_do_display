@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -17,9 +18,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _reminder_list_names() -> list[str]:
-    """Reminders 由来タスクが属しうるリスト名（書き戻し時の検索範囲）。"""
+def _reminder_list_names(task_type: str | None = None) -> list[str]:
+    """Reminders 由来タスクが属しうるリスト名（書き戻し時の検索範囲）。
+
+    task_type（"stock"/"flow"）が分かればそのリストだけ、不明なら両方を返す。
+    設定値は呼び出しのたびに読む。
+    """
+    if task_type == "stock":
+        return [settings.stock_list_name]
+    if task_type == "flow":
+        return [settings.flow_list_name]
     return [settings.stock_list_name, settings.flow_list_name]
+
+
+def _write_back_to_reminders(task_id: str, completed: bool, list_names: list[str]) -> None:
+    """Reminders.app への書き戻しをバックグラウンドで実行する（応答は待たない）。"""
+    asyncio.create_task(asyncio.to_thread(set_reminder_completed, task_id, completed, list_names))
 
 
 # task_id は Reminders 由来だと "x-apple-reminder://UUID" の形式でスラッシュを含むため、
@@ -41,18 +55,16 @@ async def complete_task(body: CompleteRequest):
         raise HTTPException(status_code=400, detail="task_type は 'stock', 'flow', 'weekly' を指定してください")
 
     # 曜日タスクは due_date をサーバー側で今日に設定（日次リセットのため）
-    from datetime import date as _date
     effective_due_date = body.due_date
     if body.task_type == "weekly":
-        effective_due_date = _date.today().isoformat()
+        effective_due_date = date.today().isoformat()
 
     await mark_complete(body.task_id, body.task_type, effective_due_date)
     await broadcast_current_data()
 
     # Reminders 書き戻しは Reminders 由来タスクのみ（weekly は不要）
     if body.task_type in ("stock", "flow"):
-        list_name = settings.stock_list_name if body.task_type == "stock" else settings.flow_list_name
-        asyncio.create_task(asyncio.to_thread(set_reminder_completed, body.task_id, True, [list_name]))
+        _write_back_to_reminders(body.task_id, True, _reminder_list_names(body.task_type))
 
     return {"status": "ok", "task_id": body.task_id}
 
@@ -64,7 +76,5 @@ async def uncomplete_task(body: UncompleteRequest):
     # weekly タスクは Reminders に存在しないので書き戻し不要。
     # それ以外は stock/flow どちらか不明なため両リストを候補に書き戻す。
     if not body.task_id.startswith("weekly_"):
-        asyncio.create_task(
-            asyncio.to_thread(set_reminder_completed, body.task_id, False, _reminder_list_names())
-        )
+        _write_back_to_reminders(body.task_id, False, _reminder_list_names())
     return {"status": "ok", "task_id": body.task_id}

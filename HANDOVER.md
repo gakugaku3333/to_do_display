@@ -31,6 +31,8 @@ Android タブレット (ブラウザ / PWA)
         │
         ├── SSE:  GET  /api/stream              → リアルタイムデータ配信
         ├── REST: GET  /api/briefing            → 朝の音声ブリーフィング読み上げテキスト（平文）
+        ├── REST: POST /api/briefing/speak      → ブリーフィングを Google Home で今すぐ再生
+        ├── REST: GET  /api/briefing/cast/{nonce}.mp3 → Google Home が取得する音声（nonce で保護）
         ├── REST: POST /api/tasks/complete       → タスク完了（IDはボディで送る）
         ├── REST: POST /api/tasks/uncomplete     → 完了取消
         ├── REST: GET  /api/weekly-tasks         → 曜日タスク一覧
@@ -74,11 +76,12 @@ to_do_display/
 │   ├── database.py              # SQLite操作（接続一元管理、WALモード）
 │   ├── scheduler.py             # APScheduler（5分間隔 + 毎朝6:15天気更新）
 │   ├── sse.py                   # SSEManager（クライアント接続管理、ブロードキャスト）
-│   ├── data_assembler.py        # キャッシュ + 完了状態フィルタリングの共通ロジック
+│   ├── data_assembler.py        # キャッシュ + 完了状態フィルタリングの共通ロジック、祝日判定 holiday_name_of
+│   ├── daily_cache.py           # 日付キーつき TTL キャッシュ（週間予定・ブリーフィング音声）
 │   ├── auth.py                  # トークン認証（Bearer / query param）
 │   ├── logging_config.py        # ロギング設定（RotatingFileHandler）
 │   ├── routers/
-│   │   ├── dashboard.py         # GET /api/stream (SSE)
+│   │   ├── dashboard.py         # GET /api/stream (SSE), /api/week, /api/briefing(/audio|/speak|/cast)
 │   │   ├── tasks.py             # POST /api/tasks/complete|uncomplete
 │   │   ├── weekly_tasks.py      # CRUD /api/weekly-tasks
 │   │   ├── school_docs.py       # POST /api/school-docs/scan
@@ -230,6 +233,31 @@ launchctl load ~/Library/LaunchAgents/com.family.dashboard.plist
 
 ---
 
+### LAN 内の接続先（Mac mini の IP 変動対策）
+
+Mac mini の IP は DHCP で変わりうるため、恒久的な接続先には **IP 予約または `.local` 名を使う**。次の二段構えにする。
+
+1. **ルーターで Mac mini の IP を予約（根本対策・推奨）**
+   ルーター管理画面の「DHCP固定割当」「アドレス予約」等で、Mac mini の MAC アドレスに IP を固定する。
+   MAC アドレスは「システム設定 > ネットワーク > 使用中の接続 > 詳細 > ハードウェア」で確認
+   （有線と Wi-Fi で別。Wi-Fi の場合は「プライベートWi-Fiアドレス」を**オフ**にしておく）。
+2. **`.local` 名で接続（ルーター設定なしでも IP 変動に追従）**
+   macOS は「システム設定 > 一般 > 共有 > ローカルホスト名」を Bonjour で自動公開している。
+   - iPhone ショートカット: URL を `http://<ローカルホスト名>.local:8080/...` にする（iOS は標準対応）
+   - Android タブレット: Android 12 以降なら Chrome で `.local` が解決できる。解決できない機種は 1. の IP 予約で対応
+   - PWA としてホーム画面に追加済みの場合は、新しい URL で開き直して**追加し直す**（旧 URL が起動 URL に保存されているため）
+
+起動時に `logs/dashboard.log` へ `アクセスURL: http://xxx.local:8080` と現在の IP 版の URL が出るので、それを端末に設定する。
+
+タブレットで `.local` に「DNSアドレスが見つかりません」と出る場合は、Mac で
+`ipconfig getifaddr en0` / `ipconfig getifaddr en1` を実行し、値が返った現在の LAN 内 IP を使って
+`http://<現在のIP>:8080` を開く。同じ家庭内ネットワークに接続し、ゲスト Wi-Fi は避ける。
+再起動後は以前の IP を流用せず再確認する（2026-10-29〜30 に実際に IP 変更と名前解決失敗を確認）。
+接続できたらルーターの IP 予約を行い、新しい URL でホーム画面への追加をやり直す。
+
+Google Home への Cast 再生は `.local` を解決できないことがあるため、`PUBLIC_BASE_URL` は空欄のままにする
+（再生のたびに現在の IP を自動検出する）。
+
 ## 6. 認証情報の管理
 
 ### git管理外のファイル一覧（.gitignore）
@@ -276,7 +304,7 @@ CREATE TABLE IF NOT EXISTS event_proposals (
 CREATE TABLE IF NOT EXISTS weekly_tasks (
     id         TEXT PRIMARY KEY,
     title      TEXT NOT NULL,
-    weekdays   TEXT NOT NULL DEFAULT '',  -- JSON配列: [0,1,4] (0=月〜6=日)
+    weekdays   TEXT NOT NULL DEFAULT '',  -- カンマ区切り: 0,1,4 (0=月〜6=日)
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
@@ -286,6 +314,7 @@ CREATE TABLE IF NOT EXISTS weekly_tasks (
 - **ストックタスク**: 完了状態は永続
 - **フロータスク**: 日付変更時に `cleanup_old_flow_completions()` で自動削除
 - **曜日タスク**: 当日日付を `due_date` として記録、翌日リセット
+- **曜日タスクの更新・削除**: 対象IDがなければ `404`。接続全体の累積変更数では別操作の変更も数えてしまうため、SQL文の `cursor.rowcount` で判定する。`tests/test_database.py` と `tests/test_weekly_tasks.py` で、作成後に存在しないIDを指定するケースを確認する。
 
 ### タスク完了APIの重要な設計
 
@@ -306,6 +335,20 @@ FastAPI のパスパラメータは `/` にマッチしないため、必ずボ�
 # 正しい呼び出し（app/routers/tasks.py）
 set_reminder_completed(task_id, True, [settings.stock_list_name])  # or flow_list_name
 ```
+
+### 終日予定の日付判定
+
+今日の予定取得でも、Google API の返却結果をそのまま表示せず、終日予定の `start.date` と
+`end.date`（終了日は含まない）を `_event_window_dates` で確認する。週間表示と同じ判定を使い、
+前日で終了した予定は除外し、今日を含む複数日の予定は残す。
+
+2026-10-30、10/29 だけの「母　休み」が今日に表示された。元カレンダーが UTC で、
+API は終日予定の検索範囲を元カレンダーのタイムゾーンで判定するため、日本時間の当日検索にも
+昨日の予定が含まれていた。終日予定は時刻へ変換せず日付で再判定すること。
+[Google 公式仕様](https://developers.google.com/workspace/calendar/api/concepts/events-calendars#calendar_time_zone)。
+`tests/test_google_calendar.py` の回帰テストで昨日・今日・明日・複数日の4ケースを確認。
+全73テスト成功後に launchd を再起動し、10/30 07:01 の SSE 配信から該当予定が除外されたことと
+`/api/health` の正常応答を確認済み。元の Google 予定やカレンダー設定の変更は不要。
 
 ### SSE (Server-Sent Events)
 
@@ -345,6 +388,7 @@ python -m pytest tests/ -v
 | 症状 | 原因と対処 |
 |------|-----------|
 | 予定が急に表示されなくなった | Google OAuth トークン失効。`curl -s localhost:8080/api/health` の `google_calendar.needs_reauth` を確認 → `python setup_google_auth.py husband` で再認証。画面にも ⚠ バッジが出る |
+| 昨日の終日予定が今日にも表示される | §7「終日予定の日付判定」を参照。元予定の開始・終了日と元カレンダーのタイムゾーンを確認し、API の取得範囲だけに依存せず日付で絞り込む |
 | 再認証しても7日で必ずまた切れる | OAuth 同意画面が「テスト」公開ステータスのまま（テストモードは refresh token を7日で失効させる）。Console で「本番」に切り替えてから再認証する（§4.2 手順3） |
 | 天気が表示されない / 古い | `python3 -c "from app.services.weather import fetch_weather; print(fetch_weather())"` で単体確認。ネットワーク問題ならサーバー再起動で再取得 |
 | チェックしてもタスクが消えない | `POST /api/tasks/complete` が 404 になっていないかブラウザDevToolsで確認。正常なら200でSSE再配信後に消える |
@@ -354,7 +398,8 @@ python -m pytest tests/ -v
 | リマインダーがタイムアウトし続ける | Reminders.app が固まっている。`killall Reminders && open -a Reminders` で再起動 |
 | コード修正しても画面が変わらない | Service Worker キャッシュ。**2回リロード**（1回目:新SW起動、2回目:新JS反映）。確実には Safari > 開発 > キャッシュを空にする |
 | Mac再起動後にサービスが起動しない | `launchctl list \| grep family` で確認。plist が `~/Library/LaunchAgents/` にあるか確認 |
-| タブレットからアクセスできない | MacのIPアドレス確認（`ipconfig getifaddr en0`）+ ファイアウォールでport 8080を許可 |
+| Google Home で再生されない | `GOOGLE_HOME_NAME` が Google Home アプリの表示名と完全一致しているか、Mac mini とスピーカーが同じLAN（同じSSID・VLAN）にいるか確認。`curl -X POST localhost:8080/api/briefing/speak` のエラー文で原因が分かる |
+| タブレットからアクセスできない | `logs/dashboard.log` の「アクセスURL」を確認（IP が変わっていれば §5「LAN 内の接続先」の IP 予約 / `.local` 名へ移行）+ ファイアウォールでport 8080を許可 |
 
 ---
 

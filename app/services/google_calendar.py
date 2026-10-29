@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 
 from google.auth.transport.requests import Request
@@ -116,33 +117,25 @@ def setup_google_auth(account_name: str):
 
 
 def _parse_event(event: dict, owner: str, tz: ZoneInfo) -> CalendarEvent:
-    title = event.get("summary", "(タイトルなし)")
     start = event.get("start", {})
-    end = event.get("end", {})
-    color = _event_color(event, owner)
-
+    start_time = end_time = None
     if "dateTime" in start:
-        start_dt = datetime.fromisoformat(start["dateTime"]).astimezone(tz)
-        end_dt = datetime.fromisoformat(end["dateTime"]).astimezone(tz)
-        return CalendarEvent(
-            id=event["id"],
-            title=title,
-            start_time=start_dt.strftime("%H:%M"),
-            end_time=end_dt.strftime("%H:%M"),
-            is_all_day=False,
-            owner=owner,
-            color=color,
-        )
-    else:
-        return CalendarEvent(
-            id=event["id"],
-            title=title,
-            start_time=None,
-            end_time=None,
-            is_all_day=True,
-            owner=owner,
-            color=color,
-        )
+        start_time = datetime.fromisoformat(start["dateTime"]).astimezone(tz).strftime("%H:%M")
+        end_time = datetime.fromisoformat(event["end"]["dateTime"]).astimezone(tz).strftime("%H:%M")
+    return CalendarEvent(
+        id=event["id"],
+        title=event.get("summary", "(タイトルなし)"),
+        start_time=start_time,
+        end_time=end_time,
+        is_all_day=start_time is None,
+        owner=owner,
+        color=_event_color(event, owner),
+    )
+
+
+def _sort_events(events: list[CalendarEvent]) -> None:
+    """終日イベントを後ろに、時刻ありは開始時刻順に並べる（in-place）。"""
+    events.sort(key=lambda e: (e.start_time is None, e.start_time or ""))
 
 
 def create_calendar_event(
@@ -217,38 +210,51 @@ def _build_jobs() -> list[tuple[Credentials, str, str]]:
     return jobs
 
 
+def _fetch_all_raw(
+    jobs: list[tuple[Credentials, str, str]], time_min: str, time_max: str,
+) -> Iterator[tuple[str, dict]]:
+    """全カレンダーの生イベントを (owner, event) で順に返す。
+
+    per-calendar の往復がボトルネックのため並列取得する。jobs と futures を投入順に
+    zip するので、重複排除の優先順は jobs の順どおり決定的。
+    """
+    if not jobs:
+        return
+    with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
+        futures = [
+            executor.submit(_fetch_calendar_raw, creds, cal_id, time_min, time_max)
+            for creds, cal_id, _ in jobs
+        ]
+        for (_, _, owner), future in zip(jobs, futures):
+            for raw in future.result():
+                yield owner, raw
+
+
 def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
     tz = ZoneInfo(tz_name)
     today = date.today()
     time_min, time_max = _day_bounds(tz, today, today)
 
-    jobs = _build_jobs()
-
-    # 各カレンダーのイベント取得を並列実行（per-calendar の往復がボトルネックのため）。
-    # jobs と futures を投入順に zip するので、重複排除の優先順は jobs の順どおり決定的。
     seen_ids: set[str] = set()
     all_events: list[CalendarEvent] = []
-    if jobs:
-        with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
-            futures = [
-                executor.submit(_fetch_calendar_raw, creds, cal_id, time_min, time_max)
-                for creds, cal_id, _ in jobs
-            ]
-            for (_, _, owner), future in zip(jobs, futures):
-                for raw in future.result():
-                    event = _parse_event(raw, owner, tz)
-                    if event.id not in seen_ids:
-                        seen_ids.add(event.id)
-                        all_events.append(event)
+    for owner, raw in _fetch_all_raw(_build_jobs(), time_min, time_max):
+        # 終日予定の API 検索は元カレンダーのタイムゾーンに従うため、
+        # UTC のカレンダーでは昨日の予定も返る。日付（終了日は排他的）で再判定する。
+        if "date" in raw.get("start", {}) and not _event_window_dates(raw, tz, today, today):
+            continue
+        event = _parse_event(raw, owner, tz)
+        if event.id not in seen_ids:
+            seen_ids.add(event.id)
+            all_events.append(event)
 
-    all_events.sort(key=lambda e: (e.start_time is None, e.start_time or ""))
+    _sort_events(all_events)
     return all_events
 
 
 def _fetch_calendar_raw(
     creds: Credentials, cal_id: str, time_min: str, time_max: str,
 ) -> list[dict]:
-    """単一カレンダーの生イベント(dict)を取得する。週間取得用（日付ごとの振り分けは呼び出し側）。"""
+    """単一カレンダーの生イベント(dict)を取得する。失敗時は空リスト（他カレンダーは継続）。"""
     try:
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
         result = service.events().list(
@@ -305,28 +311,20 @@ def fetch_week_events(tz_name: str = "Asia/Tokyo", days: int = 7) -> dict[str, l
     window_end = today + timedelta(days=days - 1)
     time_min, time_max = _day_bounds(tz, window_start, window_end)
 
-    jobs = _build_jobs()
     grouped: dict[str, list[CalendarEvent]] = {
         (window_start + timedelta(days=i)).isoformat(): [] for i in range(days)
     }
     seen: set[tuple[str, str]] = set()  # (日付, イベントID)
 
-    if jobs:
-        with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as executor:
-            futures = [
-                executor.submit(_fetch_calendar_raw, creds, cal_id, time_min, time_max)
-                for creds, cal_id, _ in jobs
-            ]
-            for (creds, cal_id, owner), future in zip(jobs, futures):
-                for raw in future.result():
-                    parsed = _parse_event(raw, owner, tz)
-                    for d in _event_window_dates(raw, tz, window_start, window_end):
-                        key = (d.isoformat(), parsed.id)
-                        if key in seen:
-                            continue
-                        seen.add(key)
-                        grouped[d.isoformat()].append(parsed)
+    for owner, raw in _fetch_all_raw(_build_jobs(), time_min, time_max):
+        parsed = _parse_event(raw, owner, tz)
+        for d in _event_window_dates(raw, tz, window_start, window_end):
+            key = (d.isoformat(), parsed.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            grouped[d.isoformat()].append(parsed)
 
     for events in grouped.values():
-        events.sort(key=lambda e: (e.start_time is None, e.start_time or ""))
+        _sort_events(events)
     return grouped

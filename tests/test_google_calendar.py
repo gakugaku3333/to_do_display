@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.services import google_calendar
 
 
@@ -13,6 +15,34 @@ def _make_service(calendar_items: list[dict]) -> MagicMock:
     # どのカレンダーでも空のイベントを返す
     service.events().list().execute.return_value = {"items": []}
     return service
+
+
+@pytest.mark.parametrize(
+    ("start_offset", "end_offset", "expected"),
+    [(-1, 0, False), (0, 1, True), (-1, 1, True), (1, 2, False)],
+)
+def test_today_all_day_events_use_dates_even_when_calendar_is_utc(
+    start_offset, end_offset, expected,
+):
+    """API が余分な終日予定を返しても終了日を含めず、複数日の予定は残す。"""
+    today = date.today()
+    service = _make_service([{"id": "family@example.com"}])
+    service.events().list().execute.return_value = {
+        "timeZone": "UTC",
+        "items": [{
+            "id": "mother-day-off",
+            "summary": "母　休み",
+            "start": {"date": (today + timedelta(days=start_offset)).isoformat()},
+            "end": {"date": (today + timedelta(days=end_offset)).isoformat()},
+        }],
+    }
+    with patch.object(google_calendar.settings, "excluded_calendar_ids", ""), \
+         patch.object(google_calendar.settings, "family_calendar_id", ""), \
+         patch.object(google_calendar, "build", return_value=service), \
+         patch.object(google_calendar, "get_credentials", lambda name: object() if name == "husband" else None):
+        events = google_calendar.fetch_today_events()
+
+    assert [e.title for e in events] == (["母　休み"] if expected else [])
 
 
 def test_excluded_calendar_is_not_requested():

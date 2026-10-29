@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     # 例: freeBusyReader 権限しか無い大学アカウントなど（403 でログが汚れる）
     excluded_calendar_ids: str = ""
 
+    # Google Home 音声ブリーフィング（Cast で再生）
+    # Google Home アプリに表示されるスピーカー名。空欄なら機能無効
+    google_home_name: str = ""
+    # 毎朝の自動再生時刻 "HH:MM"。空欄なら自動再生しない
+    briefing_cast_time: str = ""
+    # 再生時の音量 0.0〜1.0。負値なら変更しない
+    google_home_volume: float = -1.0
+    # Google Home から見た本サーバーのURL。空欄なら LAN IP を自動検出
+    public_base_url: str = ""
+
     @property
     def children_list(self) -> list[str]:
         return [c.strip() for c in self.children.split(",") if c.strip()]

@@ -12,6 +12,7 @@ import time
 from datetime import date
 from pathlib import Path
 
+from app.daily_cache import DailyTTLCache
 from app.models import TodayData, WeatherData
 
 # iOSが誤読する名前をひらがなに置換（読み上げ専用）
@@ -135,17 +136,16 @@ async def synthesize_briefing_audio(text: str, voice: str = "Kyoko") -> bytes:
 
 # 音声合成は数秒かかるため、当日分は使い回す。ただし予定/やる事の変更が反映されない
 # まま丸1日残らないよう、短めのTTLで失効させる（手動ボタンを押す度に毎回合成し直さない程度）。
-_AUDIO_CACHE_TTL_SECONDS = 60 * 60  # 1時間
-_audio_cache: tuple[float, str, bytes] | None = None  # (生成時刻, 日付, mp3バイト列)
+_audio_cache: DailyTTLCache[bytes] = DailyTTLCache(ttl_seconds=60 * 60)  # 1時間
 
 
 async def get_briefing_audio(data: TodayData) -> bytes:
     """当日分のキャッシュがあれば使い回し、無ければ合成してキャッシュする。"""
-    global _audio_cache
-    now = time.monotonic()
-    if _audio_cache and _audio_cache[1] == data.date and now - _audio_cache[0] < _AUDIO_CACHE_TTL_SECONDS:
-        return _audio_cache[2]
+    cached = _audio_cache.get(data.date)
+    if cached is not None:
+        return cached
 
+    started = time.monotonic()
     audio = await synthesize_briefing_audio(build_briefing_text(data))
-    _audio_cache = (now, data.date, audio)
+    _audio_cache.set(data.date, audio, saved_at=started)
     return audio
