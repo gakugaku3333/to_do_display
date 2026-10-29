@@ -238,6 +238,10 @@ def fetch_today_events(tz_name: str = "Asia/Tokyo") -> list[CalendarEvent]:
     seen_ids: set[str] = set()
     all_events: list[CalendarEvent] = []
     for owner, raw in _fetch_all_raw(_build_jobs(), time_min, time_max):
+        # 終日予定の API 検索は元カレンダーのタイムゾーンに従うため、
+        # UTC のカレンダーでは昨日の予定も返る。日付（終了日は排他的）で再判定する。
+        if "date" in raw.get("start", {}) and not _event_window_dates(raw, tz, today, today):
+            continue
         event = _parse_event(raw, owner, tz)
         if event.id not in seen_ids:
             seen_ids.add(event.id)

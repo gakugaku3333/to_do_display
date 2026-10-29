@@ -235,7 +235,7 @@ launchctl load ~/Library/LaunchAgents/com.family.dashboard.plist
 
 ### LAN 内の接続先（Mac mini の IP 変動対策）
 
-Mac mini の IP は DHCP で変わりうるため、**端末に IP を直書きしない**。次の二段構えにする。
+Mac mini の IP は DHCP で変わりうるため、恒久的な接続先には **IP 予約または `.local` 名を使う**。次の二段構えにする。
 
 1. **ルーターで Mac mini の IP を予約（根本対策・推奨）**
    ルーター管理画面の「DHCP固定割当」「アドレス予約」等で、Mac mini の MAC アドレスに IP を固定する。
@@ -248,6 +248,12 @@ Mac mini の IP は DHCP で変わりうるため、**端末に IP を直書き�
    - PWA としてホーム画面に追加済みの場合は、新しい URL で開き直して**追加し直す**（旧 URL が起動 URL に保存されているため）
 
 起動時に `logs/dashboard.log` へ `アクセスURL: http://xxx.local:8080` と現在の IP 版の URL が出るので、それを端末に設定する。
+
+タブレットで `.local` に「DNSアドレスが見つかりません」と出る場合は、Mac で
+`ipconfig getifaddr en0` / `ipconfig getifaddr en1` を実行し、値が返った現在の LAN 内 IP を使って
+`http://<現在のIP>:8080` を開く。同じ家庭内ネットワークに接続し、ゲスト Wi-Fi は避ける。
+再起動後は以前の IP を流用せず再確認する（2026-10-29〜30 に実際に IP 変更と名前解決失敗を確認）。
+接続できたらルーターの IP 予約を行い、新しい URL でホーム画面への追加をやり直す。
 
 Google Home への Cast 再生は `.local` を解決できないことがあるため、`PUBLIC_BASE_URL` は空欄のままにする
 （再生のたびに現在の IP を自動検出する）。
@@ -330,6 +336,20 @@ FastAPI のパスパラメータは `/` にマッチしないため、必ずボ�
 set_reminder_completed(task_id, True, [settings.stock_list_name])  # or flow_list_name
 ```
 
+### 終日予定の日付判定
+
+今日の予定取得でも、Google API の返却結果をそのまま表示せず、終日予定の `start.date` と
+`end.date`（終了日は含まない）を `_event_window_dates` で確認する。週間表示と同じ判定を使い、
+前日で終了した予定は除外し、今日を含む複数日の予定は残す。
+
+2026-10-30、10/29 だけの「母　休み」が今日に表示された。元カレンダーが UTC で、
+API は終日予定の検索範囲を元カレンダーのタイムゾーンで判定するため、日本時間の当日検索にも
+昨日の予定が含まれていた。終日予定は時刻へ変換せず日付で再判定すること。
+[Google 公式仕様](https://developers.google.com/workspace/calendar/api/concepts/events-calendars#calendar_time_zone)。
+`tests/test_google_calendar.py` の回帰テストで昨日・今日・明日・複数日の4ケースを確認。
+全73テスト成功後に launchd を再起動し、10/30 07:01 の SSE 配信から該当予定が除外されたことと
+`/api/health` の正常応答を確認済み。元の Google 予定やカレンダー設定の変更は不要。
+
 ### SSE (Server-Sent Events)
 
 - `GET /api/stream` でクライアントが接続
@@ -368,6 +388,7 @@ python -m pytest tests/ -v
 | 症状 | 原因と対処 |
 |------|-----------|
 | 予定が急に表示されなくなった | Google OAuth トークン失効。`curl -s localhost:8080/api/health` の `google_calendar.needs_reauth` を確認 → `python setup_google_auth.py husband` で再認証。画面にも ⚠ バッジが出る |
+| 昨日の終日予定が今日にも表示される | §7「終日予定の日付判定」を参照。元予定の開始・終了日と元カレンダーのタイムゾーンを確認し、API の取得範囲だけに依存せず日付で絞り込む |
 | 再認証しても7日で必ずまた切れる | OAuth 同意画面が「テスト」公開ステータスのまま（テストモードは refresh token を7日で失効させる）。Console で「本番」に切り替えてから再認証する（§4.2 手順3） |
 | 天気が表示されない / 古い | `python3 -c "from app.services.weather import fetch_weather; print(fetch_weather())"` で単体確認。ネットワーク問題ならサーバー再起動で再取得 |
 | チェックしてもタスクが消えない | `POST /api/tasks/complete` が 404 になっていないかブラウザDevToolsで確認。正常なら200でSSE再配信後に消える |
